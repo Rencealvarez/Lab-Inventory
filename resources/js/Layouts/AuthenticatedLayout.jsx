@@ -4,6 +4,8 @@ import NavLink from '@/Components/NavLink';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
 import { Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import GlobalNotifications from '@/Components/GlobalNotifications';
+import GlobalChat from '@/Components/GlobalChat';
 
 export default function AuthenticatedLayout({ header, children }) {
     const user = usePage().props.auth.user;
@@ -76,6 +78,9 @@ export default function AuthenticatedLayout({ header, children }) {
                                     </Dropdown.Content>
                                 </Dropdown>
                             </div>
+
+                            {/* Global Notifications */}
+                            <GlobalNotifications />
                         </div>
 
                         <div className="-me-2 flex items-center sm:hidden">
@@ -171,6 +176,9 @@ export default function AuthenticatedLayout({ header, children }) {
             )}
 
             <main className="flex-1 overflow-hidden">{children}</main>
+
+            {/* Global Chat Component */}
+            <GlobalChat />
         </div>
     );
 }
