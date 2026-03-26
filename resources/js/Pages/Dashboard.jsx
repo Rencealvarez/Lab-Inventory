@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import {
     AlertTriangle,
     ArrowLeftRight,
@@ -7,7 +7,9 @@ import {
     User,
     AlertCircle,
     Building2,
+    LayoutDashboard
 } from 'lucide-react';
+import LabLayout from '@/Layouts/LabLayout';
 
 function formatRelativeTime(isoString) {
     if (!isoString) return '';
@@ -100,43 +102,23 @@ export default function Dashboard({ stats, lowStock, recentActivity }) {
     ];
 
     const navLinks = [
-        'Dashboard',
-        'Inventory',
-        'Transactions',
-        'Facilities',
-        'Reports',
-        'Maintenance',
-        'Users',
+        { name: 'Dashboard', href: route('dashboard') },
+        { name: 'Inventory', href: route('inventory') },
+        { name: 'Transactions', href: route('transactions') },
+        { name: 'Facilities', href: route('facilities') },
+        { name: 'Reports', href: route('reports') },
+        { name: 'Maintenance', href: route('maintenance') },
+        { name: 'Users', href: route('users') },
     ];
 
     return (
-        <>
-            <Head title="Dashboard" />
-            <div className="h-screen overflow-hidden bg-[#f8fafc]">
-                <div className="flex h-full">
-                    <aside className="h-full w-[260px] flex-shrink-0 bg-[#3f59a3] px-5 py-6 text-white shadow-lg overflow-hidden">
-                        <h1 className="mb-6 text-3xl font-semibold leading-none">
-                            Lab System
-                        </h1>
-                        <nav className="flex flex-col gap-4 text-base font-medium">
-                            {navLinks.map((link) => (
-                                <a
-                                    key={link}
-                                    href="#"
-                                    className="rounded-md px-2 py-1 transition-colors hover:bg-white/10 hover:text-blue-100"
-                                >
-                                    {link}
-                                </a>
-                            ))}
-                        </nav>
-                    </aside>
-
-                    <main className="flex-1 h-full overflow-hidden flex flex-col">
-                        <header className="shrink-0 border-b border-gray-200 bg-[#e6eff8] px-4 py-2 shadow-sm">
-                            <h2 className="text-2xl font-medium text-gray-800">
-                                Welcome Admin
-                            </h2>
-                        </header>
+        <LabLayout title="Dashboard">
+            <div className="flex-1 overflow-y-auto p-4">
+                <header className="mb-4">
+                    <h2 className="text-2xl font-medium text-gray-800 tracking-tight">
+                        Welcome back, <span className="font-bold text-[#3f59a3]">Admin</span>
+                    </h2>
+                </header>
 
                         <div className="flex-1 overflow-y-auto p-4">
                             <section className="grid grid-cols-4 gap-4">
@@ -277,9 +259,7 @@ export default function Dashboard({ stats, lowStock, recentActivity }) {
                                 </div>
                             </section>
                         </div>
-                    </main>
-                </div>
             </div>
-        </>
+        </LabLayout>
     );
 }
