@@ -28,10 +28,10 @@ export default function Maintenance() {
     ];
 
     const incidents = [
-        { id: 'INC-001', item: 'Microscope (SKU-001)', reportedBy: 'Dr. Smith', date: '2023-11-10', severity: 'Medium', damage: 'Scratched lens during use', cost: '$150.00', action: 'Under Repair', resolved: false },
-        { id: 'INC-002', item: 'Beaker 500ml (SKU-002)', reportedBy: 'Jane Doe', date: '2023-11-15', severity: 'Low', damage: 'Cracked edge', cost: '$15.00', action: 'Discarded', resolved: true },
-        { id: 'INC-003', item: 'Oscilloscope (SKU-003)', reportedBy: 'Prof. Davis', date: '2023-10-05', severity: 'Critical', damage: 'Complete power failure, smoked', cost: '$850.00', action: 'Replaced', resolved: true },
-        { id: 'INC-004', item: 'Centrifuge (SKU-010)', reportedBy: 'Alice Chen', date: '2023-11-18', severity: 'High', damage: 'Rotor imbalance detected', cost: '$300.00', action: 'Pending', resolved: false },
+        { id: 'INC-001', item: 'Microscope (SKU-001)', reportedBy: 'Dr. Smith', date: '2023-11-10', severity: 'Medium', damage: 'Scratched lens during use', cost: '₱150.00', action: 'Under Repair', resolved: false },
+        { id: 'INC-002', item: 'Beaker 500ml (SKU-002)', reportedBy: 'Jane Doe', date: '2023-11-15', severity: 'Low', damage: 'Cracked edge', cost: '₱15.00', action: 'Discarded', resolved: true },
+        { id: 'INC-003', item: 'Oscilloscope (SKU-003)', reportedBy: 'Prof. Davis', date: '2023-10-05', severity: 'Critical', damage: 'Complete power failure, smoked', cost: '₱850.00', action: 'Replaced', resolved: true },
+        { id: 'INC-004', item: 'Centrifuge (SKU-010)', reportedBy: 'Alice Chen', date: '2023-11-18', severity: 'High', damage: 'Rotor imbalance detected', cost: '₱300.00', action: 'Pending', resolved: false },
     ];
 
     const getSeverityStyle = (severity) => {
@@ -216,7 +216,7 @@ export default function Maintenance() {
                                 <div>
                                     <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">Est. Repair Cost</label>
                                     <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[13px]">$</span>
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[13px]">₱</span>
                                         <input type="number" step="0.01" className="block w-full rounded-lg border border-[#d2deeb] bg-white pl-7 pr-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors" placeholder="0.00" />
                                     </div>
                                 </div>
