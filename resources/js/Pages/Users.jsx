@@ -3,7 +3,7 @@ import { Head, Link } from '@inertiajs/react';
 import {
     Users as UsersIcon,
     Plus,
-    MoreVertical,
+    MoreVertical,   
     Search,
     XCircle
 } from 'lucide-react';

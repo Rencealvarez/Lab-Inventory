@@ -66,15 +66,15 @@ export default function LabLayout({ children, title }) {
                 </nav>
 
                 <div className="mt-auto pt-6 border-t border-white/10">
-                    <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-black/10 mb-4">
-                        <div className="h-9 w-9 rounded-full bg-[#4663ac] flex items-center justify-center border border-white/20 shadow-inner">
+                    <Link href={route('profile.show')} className="flex items-center gap-3 px-3 py-3 rounded-xl bg-black/10 mb-4 hover:bg-black/20 transition-colors group cursor-pointer border border-transparent hover:border-white/10 shadow-sm">
+                        <div className="h-9 w-9 rounded-full bg-[#4663ac] flex items-center justify-center border border-white/20 shadow-inner group-hover:scale-105 transition-transform">
                             <UserCircle className="h-6 w-6 text-blue-100" />
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-[13px] font-bold truncate">{user.name}</p>
                             <p className="text-[11px] text-blue-200 truncate opacity-80 uppercase tracking-tighter">Administrator</p>
                         </div>
-                    </div>
+                    </Link>
                     
                     <Link
                         href={route('logout')}
