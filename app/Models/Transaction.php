@@ -11,6 +11,8 @@ class Transaction extends Model
 {
     use HasFactory;
 
+    protected $table = 'transactions';
+
     public const TYPE_STOCK_IN = 'stock_in';
     public const TYPE_STOCK_OUT = 'stock_out';
     public const TYPE_TRANSFER = 'transfer';

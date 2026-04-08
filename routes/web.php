@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\InventoryController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -19,9 +20,18 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
-Route::get('/inventory', function () {
-    return Inertia::render('Inventory');
-})->middleware(['auth', 'verified'])->name('inventory');
+Route::get('/inventory', [InventoryController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('inventory');
+Route::post('/inventory', [InventoryController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('inventory.store');
+Route::put('/inventory/{item}', [InventoryController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('inventory.update');
+Route::delete('/inventory/{item}', [InventoryController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('inventory.destroy');
 
 Route::get('/transactions', function () {
     return Inertia::render('Transactions');

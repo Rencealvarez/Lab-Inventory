@@ -14,6 +14,8 @@ class Laboratory extends Model
 {
     use HasFactory;
 
+    protected $table = 'laboratories';
+
     public const STATUS_ACTIVE = 'active';
     public const STATUS_INACTIVE = 'inactive';
     public const STATUS_MAINTENANCE = 'maintenance';

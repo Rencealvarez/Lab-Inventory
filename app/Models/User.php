@@ -16,6 +16,8 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
+    protected $table = 'users';
+
     public const ROLE_ADMIN = 'admin';
     public const ROLE_TECHNICIAN = 'technician';
     public const ROLE_STAFF = 'staff';

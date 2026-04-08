@@ -3,93 +3,111 @@
 namespace App\Http\Controllers;
 
 use App\Models\Item;
+use App\Models\Laboratory;
 use App\Models\Transaction;
 use App\Models\User;
-use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
+use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(): Response
     {
-        $totalItems = Item::count();
+        $totalItems = Item::query()->count();
 
-        $borrowed = Schema::hasColumn('transactions', 'status')
-            ? Transaction::where('status', 'issued')->count()
-            : Transaction::where('transaction_type', Transaction::TYPE_STOCK_OUT)->count();
+        $borrowed = Item::query()
+            ->where('status', Item::STATUS_IN_USE)
+            ->whereRaw('is_decommissioned IS NOT TRUE')
+            ->count();
 
-        // "Damaged" can be represented either by `items.status = damaged` or `items.item_condition = damaged`.
-        $hasItemCondition = Schema::hasColumn('items', 'item_condition');
-        $hasStatus = Schema::hasColumn('items', 'status');
+        $damaged = Item::query()
+            ->where('item_condition', Item::CONDITION_DAMAGED)
+            ->whereRaw('is_decommissioned IS NOT TRUE')
+            ->count();
 
-        $damaged = 0;
-        if ($hasItemCondition || $hasStatus) {
-            $damaged = Item::query()->where(function ($q) use ($hasItemCondition, $hasStatus) {
-                $started = false;
+        $totalUsers = User::query()->count();
 
-                if ($hasItemCondition) {
-                    $q->where('item_condition', 'damaged');
-                    $started = true;
-                }
-
-                if ($hasStatus) {
-                    if ($started) {
-                        $q->orWhere('status', 'damaged');
-                    } else {
-                        $q->where('status', 'damaged');
-                    }
-                }
-            })->count();
-        }
-
-        $totalUsers = User::count();
-
-        // Low stock: `current_stock <= min_stock_alert` (fallback: `quantity <= min_stock_alert`).
-        $lowStock = [];
-        if (Schema::hasColumn('items', 'min_stock_alert')) {
-            $currentStockColumn = Schema::hasColumn('items', 'current_stock')
-                ? 'current_stock'
-                : 'quantity';
-
-            $lowStockItems = Item::with('location.laboratory')
-                ->whereColumn($currentStockColumn, '<=', 'min_stock_alert')
-                ->orderBy($currentStockColumn, 'asc')
-                ->get();
-
-            $lowStock = $lowStockItems->map(function (Item $item) use ($currentStockColumn) {
-                return [
-                    'item' => $item->name,
-                    'lab' => $item->location?->laboratory?->name ?? '',
-                    'left' => $item->{$currentStockColumn},
-                ];
-            })->values()->all();
-        }
-
-        $recentActivityQuery = Transaction::with([
-            'item',
-            'user',
-            'item.location.laboratory',
-        ]);
-
-        if (Schema::hasColumn('transactions', 'status')) {
-            $recentActivityQuery->where('status', 'issued');
-        } else {
-            $recentActivityQuery->where('transaction_type', Transaction::TYPE_STOCK_OUT);
-        }
-
-        $recentActivity = $recentActivityQuery
-            ->orderByDesc('transacted_at')
-            ->take(5)
+        $recentActivity = Transaction::query()
+            ->with([
+                'item.location.laboratory',
+                'user',
+            ])
+            ->latest('transacted_at')
+            ->limit(5)
             ->get()
             ->map(function (Transaction $transaction) {
+                $user = $transaction->user;
+
                 return [
-                    'item' => $transaction->item?->name ?? '',
-                    'borrower' => $transaction->user?->name
-                        ?? $transaction->user?->username
-                        ?? $transaction->user?->email
-                        ?? '',
-                    'lab' => $transaction->item?->location?->laboratory?->name ?? '',
+                    'id' => $transaction->id,
+                    'item' => $transaction->item?->name ?? '—',
+                    'borrower' => $user?->name
+                        ?? $user?->username
+                        ?? $user?->email
+                        ?? '—',
+                    'lab' => $transaction->item?->location?->laboratory?->name ?? '—',
                     'time' => $transaction->transacted_at?->toIso8601String(),
+                    'typeLabel' => match ($transaction->transaction_type) {
+                        Transaction::TYPE_STOCK_IN => 'Stock in',
+                        Transaction::TYPE_STOCK_OUT => 'Stock out',
+                        Transaction::TYPE_TRANSFER => 'Transfer',
+                        Transaction::TYPE_ADJUSTMENT => 'Adjustment',
+                        default => ucfirst(str_replace('_', ' ', (string) $transaction->transaction_type)),
+                    },
+                ];
+            })
+            ->values()
+            ->all();
+
+        $lowStock = Item::query()
+            ->with(['location.laboratory'])
+            ->whereRaw('is_decommissioned IS NOT TRUE')
+            ->whereNotNull('min_stock_alert')
+            ->where('min_stock_alert', '>', 0)
+            ->whereColumn('quantity', '<=', 'min_stock_alert')
+            ->orderBy('quantity')
+            ->limit(50)
+            ->get()
+            ->map(function (Item $item) {
+                return [
+                    'id' => $item->id,
+                    'item' => $item->name,
+                    'lab' => $item->location?->laboratory?->name ?? $item->location?->name ?? '—',
+                    'left' => (int) $item->quantity,
+                ];
+            })
+            ->values()
+            ->all();
+
+        $laboratoryStatus = Laboratory::query()
+            ->withCount('items')
+            ->orderBy('name')
+            ->get()
+            ->map(function (Laboratory $lab) {
+                $occupancy = 0;
+                if ($lab->capacity && $lab->capacity > 0) {
+                    $occupancy = min(100, (int) round(($lab->items_count / $lab->capacity) * 100));
+                }
+
+                $statusLabel = match ($lab->status) {
+                    Laboratory::STATUS_MAINTENANCE => 'Maintenance',
+                    Laboratory::STATUS_INACTIVE => 'Inactive',
+                    default => 'Active',
+                };
+
+                $statusTone = match ($lab->status) {
+                    Laboratory::STATUS_MAINTENANCE => 'bg-orange-100 text-orange-700 border-orange-200',
+                    Laboratory::STATUS_INACTIVE => 'bg-gray-100 text-gray-700 border-gray-200',
+                    default => 'bg-green-100 text-green-700 border-green-200',
+                };
+
+                return [
+                    'id' => $lab->id,
+                    'name' => $lab->name,
+                    'status' => $statusLabel,
+                    'statusTone' => $statusTone,
+                    'occupancy' => $occupancy,
+                    'assigned' => $lab->items_count,
                 ];
             })
             ->values()
@@ -104,7 +122,7 @@ class DashboardController extends Controller
             ],
             'lowStock' => $lowStock,
             'recentActivity' => $recentActivity,
+            'laboratoryStatus' => $laboratoryStatus,
         ]);
     }
 }
-

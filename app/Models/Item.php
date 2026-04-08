@@ -14,6 +14,8 @@ class Item extends Model
 {
     use HasFactory, SoftDeletes;
 
+    protected $table = 'items';
+
     public const CONDITION_GOOD = 'good';
     public const CONDITION_FAIR = 'fair';
     public const CONDITION_DAMAGED = 'damaged';
@@ -28,14 +30,18 @@ class Item extends Model
      */
     protected $fillable = [
         'category_id',
+        'type',
         'location_id',
         'created_by',
         'assigned_to',
         'name',
+        'item_name',
         'sku',
         'description',
         'unit_cost',
         'quantity',
+        'current_stock',
+        'min_stock_alert',
         'unit',
         'item_condition',
         'status',
@@ -50,6 +56,7 @@ class Item extends Model
     {
         return [
             'unit_cost' => 'decimal:2',
+            'min_stock_alert' => 'integer',
             'is_decommissioned' => 'boolean',
             'decommissioned_at' => 'datetime',
         ];
@@ -74,12 +81,13 @@ class Item extends Model
 
     public function scopeActive(Builder $query): Builder
     {
-        return $query->where('is_decommissioned', false);
+        // PostgreSQL: compare boolean to false/true, not 0/1 (avoids "boolean = integer" errors).
+        return $query->whereRaw('is_decommissioned IS NOT TRUE');
     }
 
     public function scopeDecommissioned(Builder $query): Builder
     {
-        return $query->where('is_decommissioned', true);
+        return $query->whereRaw('is_decommissioned IS TRUE');
     }
 
     public function category(): BelongsTo
@@ -105,5 +113,20 @@ class Item extends Model
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    public function setItemNameAttribute(?string $value): void
+    {
+        $this->attributes['name'] = $value;
+    }
+
+    public function setCurrentStockAttribute(int|string|null $value): void
+    {
+        $this->attributes['quantity'] = $value;
+    }
+
+    public function setTypeAttribute(int|string|null $value): void
+    {
+        $this->attributes['category_id'] = $value;
     }
 }
