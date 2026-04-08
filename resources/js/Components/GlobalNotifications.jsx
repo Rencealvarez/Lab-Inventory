@@ -29,7 +29,7 @@ export default function GlobalNotifications() {
         {
             id: 3,
             title: 'Maintenance Update',
-            message: 'Beaker 500ml repair cost updated to $15.00',
+            message: 'Beaker 500ml repair cost updated to ₱15.00',
             time: '1 hour ago',
             type: 'maintenance',
             icon: <Clock className="h-4 w-4 text-orange-500" />,
