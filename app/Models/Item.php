@@ -17,13 +17,24 @@ class Item extends Model
     protected $table = 'items';
 
     public const CONDITION_GOOD = 'good';
+
     public const CONDITION_FAIR = 'fair';
+
     public const CONDITION_DAMAGED = 'damaged';
 
     public const STATUS_AVAILABLE = 'available';
+
     public const STATUS_RESERVED = 'reserved';
+
     public const STATUS_IN_USE = 'in_use';
+
     public const STATUS_LOST = 'lost';
+
+    public const STATUS_DAMAGED = 'damaged';
+
+    public const STATUS_UNDER_REPAIR = 'under_repair';
+
+    public const STATUS_INACTIVE = 'inactive';
 
     /**
      * @var list<string>
@@ -75,6 +86,9 @@ class Item extends Model
                 self::STATUS_RESERVED,
                 self::STATUS_IN_USE,
                 self::STATUS_LOST,
+                self::STATUS_DAMAGED,
+                self::STATUS_UNDER_REPAIR,
+                self::STATUS_INACTIVE,
             ])],
         ];
     }
@@ -113,6 +127,11 @@ class Item extends Model
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    public function incidentReports(): HasMany
+    {
+        return $this->hasMany(IncidentReport::class);
     }
 
     public function setItemNameAttribute(?string $value): void

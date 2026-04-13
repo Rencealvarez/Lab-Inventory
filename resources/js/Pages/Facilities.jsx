@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Head, Link } from '@inertiajs/react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
+import { Head } from '@inertiajs/react';
 import {
     Building2,
     Plus,
@@ -10,107 +10,129 @@ import {
     XCircle,
     Users,
     Clock,
-    Activity
+    Activity,
+    Package
 } from 'lucide-react';
 
 import LabLayout from '@/Layouts/LabLayout';
 
-export default function Facilities() {
+function occupancyPercent(current, max) {
+    if (max == null || max <= 0) {
+        return 0;
+    }
+    return (current / max) * 100;
+}
+
+const FacilityCard = memo(function FacilityCard({ fac, getStatusStyle, onSelect }) {
+    const occupancyPercentage = occupancyPercent(
+        fac.current_occupancy ?? 0,
+        fac.max_capacity ?? 0
+    );
+
+    return (
+        <div
+            role="button"
+            tabIndex={0}
+            onClick={() => onSelect(fac)}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelect(fac);
+                }
+            }}
+            className="bg-white rounded-xl shadow-sm border border-[#e1f1fd] p-5 hover:shadow-md transition-all flex flex-col h-full cursor-pointer group active:scale-[0.98]"
+        >
+            <div className="flex justify-between items-start mb-4">
+                <div>
+                    <h3 className="text-lg font-bold text-gray-800 lg:group-hover:text-[#4663ac] transition-colors">{fac.lab_name}</h3>
+                    <p className="text-[13px] text-gray-500 flex items-center gap-1.5 mt-1">
+                        <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                        {fac.building_name}, Floor {fac.floor_level}
+                    </p>
+                </div>
+                <span className={`px-2.5 py-1 rounded-md border text-[11px] font-bold shadow-sm ${getStatusStyle(fac.status)}`}>
+                    {fac.status}
+                </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-5 p-3 bg-[#f8fafc] rounded-lg">
+                <div>
+                    <p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Manager</p>
+                    <p className="text-[13px] font-medium text-gray-700">{fac.manager_id}</p>
+                </div>
+                <div>
+                    <p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-1 flex items-center gap-1"><Clock className="w-3 h-3" /> Hours</p>
+                    <p className="text-[13px] font-medium text-gray-700">{fac.opening_hours}</p>
+                </div>
+                <div className="col-span-2">
+                    <p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-1 flex items-center gap-1"><Package className="w-3 h-3" /> Items assigned</p>
+                    <p className="text-[13px] font-medium text-gray-700">{fac.total_items ?? 0} <span className="text-gray-400 font-normal">in this lab</span></p>
+                </div>
+            </div>
+
+            <div className="mb-6">
+                <div className="flex justify-between items-end mb-1.5">
+                    <p className="text-[12px] font-semibold text-gray-500 flex items-center gap-1"><Activity className="w-3 h-3" /> Occupancy</p>
+                    <p className="text-[13px] font-bold text-gray-800">{fac.current_occupancy ?? 0} <span className="text-gray-400 font-medium">/ {fac.max_capacity ?? 0}</span></p>
+                </div>
+                <div className="w-full h-2 bg-[#f1f5f9] rounded-full overflow-hidden">
+                    <div
+                        className={`h-full rounded-full ${occupancyPercentage > 80 ? 'bg-red-500' : 'bg-[#4663ac]'}`}
+                        style={{ width: `${Math.min(occupancyPercentage, 100)}%` }}
+                    ></div>
+                </div>
+            </div>
+
+            <div className="mt-auto pt-4 border-t border-[#f1f5f9] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    {fac.is_available_for_booking ? (
+                        <span className="flex items-center gap-1.5 text-[12px] font-semibold text-green-600">
+                            <CheckCircle2 className="w-4 h-4" /> Available for Booking
+                        </span>
+                    ) : (
+                        <span className="flex items-center gap-1.5 text-[12px] font-semibold text-gray-400">
+                            <XCircle className="w-4 h-4" /> Not Available
+                        </span>
+                    )}
+                </div>
+                <button type="button" className="p-1.5 rounded-md hover:bg-[#f1f5f9] text-gray-400 hover:text-gray-600 transition-colors">
+                    <MoreVertical className="w-[18px] h-[18px]" />
+                </button>
+            </div>
+        </div>
+    );
+});
+
+export default function Facilities({ facilities: facilitiesProp = [] }) {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [selectedFacility, setSelectedFacility] = useState(null);
-    
-    const facilities = [
-        { 
-            id: 1, 
-            lab_name: 'Physics Lab A', 
-            building_name: 'Philippine Christian University Building 1', 
-            floor_level: 2, 
-            manager_id: 'Dr. Robert Smith', 
-            status: 'Active', 
-            opening_hours: '08:00 AM - 05:00 PM', 
-            current_occupancy: 25, 
-            max_capacity: 40, 
-            is_available_for_booking: true,
-            description: 'A primary laboratory for undergraduate physics experiments, featuring high-precision equipment for mechanics, optics, and thermodynamics studies.'
-        },
-        { 
-            id: 2, 
-            lab_name: 'Chemistry Lab 1', 
-            building_name: 'Philippine Christian University Building 1', 
-            floor_level: 3, 
-            manager_id: 'Dr. Sarah Jones', 
-            status: 'Maintenance', 
-            opening_hours: '08:00 AM - 05:00 PM', 
-            current_occupancy: 0, 
-            max_capacity: 30, 
-            is_available_for_booking: false,
-            description: 'Advanced chemistry workstation equipped with specialized fume hoods and safe chemical storage for organic synthesis and analytical testing.'
-        },
-        { 
-            id: 3, 
-            lab_name: 'Biology Research', 
-            building_name: 'Philippine Christian University Building 2', 
-            floor_level: 1, 
-            manager_id: 'Dr. Michael Alan', 
-            status: 'Active', 
-            opening_hours: '09:00 AM - 06:00 PM', 
-            current_occupancy: 15, 
-            max_capacity: 50, 
-            is_available_for_booking: true,
-            description: 'State-of-the-art biological research center focusing on microbiology and genetics, including specialized incubation rooms.'
-        },
-        { 
-            id: 4, 
-            lab_name: 'IT Computer Lab', 
-            building_name: 'Philippine Christian University Building 3', 
-            floor_level: 4, 
-            manager_id: 'Prof. David Davis', 
-            status: 'Active', 
-            opening_hours: '24/7', 
-            current_occupancy: 50, 
-            max_capacity: 60, 
-            is_available_for_booking: true,
-            description: 'High-speed computing facility with 24/7 access, optimized for software development, database management, and network research.'
-        },
-        { 
-            id: 5, 
-            lab_name: 'Advanced Robotics', 
-            building_name: 'Philippine Christian University Building 3', 
-            floor_level: 5, 
-            manager_id: 'Dr. Emma Stone', 
-            status: 'Closed', 
-            opening_hours: '10:00 AM - 04:00 PM', 
-            current_occupancy: 0, 
-            max_capacity: 20, 
-            is_available_for_booking: false,
-            description: 'Collaborative space for robotics engineering and automation, featuring robotic arms and industrial control systems.'
-        },
-        { 
-            id: 6, 
-            lab_name: 'Materials Science', 
-            building_name: 'Philippine Christian University Building 4', 
-            floor_level: 2, 
-            manager_id: 'Prof. John Doe', 
-            status: 'Active', 
-            opening_hours: '08:00 AM - 08:00 PM', 
-            current_occupancy: 18, 
-            max_capacity: 25, 
-            is_available_for_booking: true,
-            description: 'Specialized lab for material testing and characterization, including metallurgy and high-temperature material studies.'
-        },
-    ];
+    const [search, setSearch] = useState('');
 
-    const getStatusStyle = (status) => {
+    const facilities = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) {
+            return facilitiesProp;
+        }
+        return facilitiesProp.filter(
+            (fac) =>
+                (fac.lab_name && fac.lab_name.toLowerCase().includes(q)) ||
+                (fac.building_name && fac.building_name.toLowerCase().includes(q)) ||
+                (fac.code && String(fac.code).toLowerCase().includes(q))
+        );
+    }, [facilitiesProp, search]);
+
+    const getStatusStyle = useCallback((status) => {
         switch (status) {
             case 'Active': return 'text-green-600 bg-green-50 border-green-200';
             case 'Maintenance': return 'text-orange-600 bg-orange-50 border-orange-200';
             case 'Closed': return 'text-red-600 bg-red-50 border-red-200';
             default: return 'text-gray-600 bg-gray-50 border-gray-200';
         }
-    };
+    }, []);
 
     return (
         <LabLayout title="Facilities">
+            <Head title="Facilities" />
             <div className="flex-1 overflow-auto p-8">
                 <div className="mx-auto w-full max-w-[1200px]">
                     {/* Header Section */}
@@ -131,6 +153,8 @@ export default function Facilities() {
                                 </div>
                                 <input
                                     type="text"
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
                                     className="block w-full sm:w-64 rounded-lg border border-[#d2deeb] bg-white py-2.5 pl-10 pr-3 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] transition-colors shadow-sm"
                                     placeholder="Search facilities..."
                                 />
@@ -147,71 +171,21 @@ export default function Facilities() {
 
                     {/* Facilities Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {facilities.map((fac) => {
-                            const occupancyPercentage = (fac.current_occupancy / fac.max_capacity) * 100;
-                            
-                            return (
-                                <div 
-                                    key={fac.id} 
-                                    onClick={() => setSelectedFacility(fac)}
-                                    className="bg-white rounded-xl shadow-sm border border-[#e1f1fd] p-5 hover:shadow-md transition-all flex flex-col h-full cursor-pointer group active:scale-[0.98]"
-                                >
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <h3 className="text-lg font-bold text-gray-800 lg:group-hover:text-[#4663ac] transition-colors">{fac.lab_name}</h3>
-                                            <p className="text-[13px] text-gray-500 flex items-center gap-1.5 mt-1">
-                                                <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                                                {fac.building_name}, Floor {fac.floor_level}
-                                            </p>
-                                        </div>
-                                        <span className={`px-2.5 py-1 rounded-md border text-[11px] font-bold shadow-sm ${getStatusStyle(fac.status)}`}>
-                                            {fac.status}
-                                        </span>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-4 mb-5 p-3 bg-[#f8fafc] rounded-lg">
-                                        <div>
-                                            <p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Manager</p>
-                                            <p className="text-[13px] font-medium text-gray-700">{fac.manager_id}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[11px] text-gray-400 uppercase font-semibold tracking-wider mb-1 flex items-center gap-1"><Clock className="w-3 h-3" /> Hours</p>
-                                            <p className="text-[13px] font-medium text-gray-700">{fac.opening_hours}</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="mb-6">
-                                        <div className="flex justify-between items-end mb-1.5">
-                                            <p className="text-[12px] font-semibold text-gray-500 flex items-center gap-1"><Activity className="w-3 h-3" /> Occupancy</p>
-                                            <p className="text-[13px] font-bold text-gray-800">{fac.current_occupancy} <span className="text-gray-400 font-medium">/ {fac.max_capacity}</span></p>
-                                        </div>
-                                        <div className="w-full h-2 bg-[#f1f5f9] rounded-full overflow-hidden">
-                                            <div 
-                                                className={`h-full rounded-full ${occupancyPercentage > 80 ? 'bg-red-500' : 'bg-[#4663ac]'}`}
-                                                style={{ width: `${Math.min(occupancyPercentage, 100)}%` }}
-                                            ></div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="mt-auto pt-4 border-t border-[#f1f5f9] flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            {fac.is_available_for_booking ? (
-                                                <span className="flex items-center gap-1.5 text-[12px] font-semibold text-green-600">
-                                                    <CheckCircle2 className="w-4 h-4" /> Available for Booking
-                                                </span>
-                                            ) : (
-                                                <span className="flex items-center gap-1.5 text-[12px] font-semibold text-gray-400">
-                                                    <XCircle className="w-4 h-4" /> Not Available
-                                                </span>
-                                            )}
-                                        </div>
-                                        <button className="p-1.5 rounded-md hover:bg-[#f1f5f9] text-gray-400 hover:text-gray-600 transition-colors">
-                                            <MoreVertical className="w-[18px] h-[18px]" />
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                        {facilities.length === 0 && (
+                            <div className="col-span-full rounded-xl border border-dashed border-[#d2deeb] bg-[#f8fafc] px-6 py-12 text-center text-[13px] text-gray-500">
+                                {facilitiesProp.length === 0
+                                    ? 'No laboratories found. Add labs and locations in the database to see them here.'
+                                    : 'No facilities match your search.'}
+                            </div>
+                        )}
+                        {facilities.map((fac) => (
+                            <FacilityCard
+                                key={fac.id}
+                                fac={fac}
+                                getStatusStyle={getStatusStyle}
+                                onSelect={setSelectedFacility}
+                            />
+                        ))}
                     </div>
 
                 </div>
@@ -253,6 +227,13 @@ export default function Facilities() {
                                         </span>
                                     </div>
                                     <div>
+                                        <label className="mb-1 block text-[11px] font-bold text-gray-400 uppercase tracking-wider uppercase">Items assigned</label>
+                                        <p className="text-[13px] font-medium text-gray-800 flex items-center gap-1.5">
+                                            <Package className="w-3.5 h-3.5 text-[#4663ac]" />
+                                            {selectedFacility.total_items ?? 0} in this lab
+                                        </p>
+                                    </div>
+                                    <div>
                                         <label className="mb-1 block text-[11px] font-bold text-gray-400 uppercase tracking-wider uppercase">Location</label>
                                         <p className="text-[13px] font-medium text-gray-800 flex items-center gap-1.5">
                                             <MapPin className="w-3.5 h-3.5 text-[#4663ac]" />
@@ -271,6 +252,16 @@ export default function Facilities() {
                                         <p className="text-[13px] font-medium text-gray-800 flex items-center gap-1.5">
                                             <Clock className="w-3.5 h-3.5 text-[#4663ac]" />
                                             {selectedFacility.opening_hours}
+                                        </p>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="mb-1 block text-[11px] font-bold text-gray-400 uppercase tracking-wider uppercase">Borrow occupancy</label>
+                                        <p className="text-[13px] font-medium text-gray-800 flex items-center gap-1.5">
+                                            <Activity className="w-3.5 h-3.5 text-[#4663ac]" />
+                                            {selectedFacility.current_occupancy ?? 0} active borrows
+                                            {selectedFacility.max_capacity > 0
+                                                ? ` (capacity ${selectedFacility.max_capacity})`
+                                                : ''}
                                         </p>
                                     </div>
                                 </div>

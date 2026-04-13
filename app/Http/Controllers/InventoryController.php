@@ -7,6 +7,7 @@ use App\Models\Item;
 use App\Models\Location;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -15,9 +16,22 @@ class InventoryController extends Controller
     public function index(): Response
     {
         $items = Item::query()
+            ->select([
+                'id',
+                'sku',
+                'name',
+                'category_id',
+                'quantity',
+                'min_stock_alert',
+                'location_id',
+                'status',
+                'item_condition',
+                'is_decommissioned',
+            ])
             ->with([
-                'category',
-                'location.laboratory',
+                'category:id,name',
+                'location:id,name,laboratory_id',
+                'location.laboratory:id,name',
             ])
             ->orderBy('name')
             ->get()
@@ -61,7 +75,7 @@ class InventoryController extends Controller
             'location_id' => 'required|integer|exists:locations,id',
             'current_stock' => 'required|integer|min:0',
             'min_stock_alert' => 'nullable|integer|min:0',
-            'status' => 'required|string|in:available,reserved,in_use,lost',
+            'status' => 'required|string|in:available,reserved,in_use,lost,damaged,under_repair,inactive',
         ]);
 
         Item::create([
@@ -79,19 +93,21 @@ class InventoryController extends Controller
             'created_by' => $request->user()?->id,
         ]);
 
+        Cache::forget(DashboardController::STATS_CACHE_KEY);
+
         return redirect()->back();
     }
 
     public function update(Request $request, Item $item): RedirectResponse
     {
         $validated = $request->validate([
-            'sku' => 'required|string|max:60|unique:items,sku,' . $item->id,
+            'sku' => 'required|string|max:60|unique:items,sku,'.$item->id,
             'name' => 'required|string|max:150',
             'type' => 'required|integer|exists:categories,id',
             'location_id' => 'required|integer|exists:locations,id',
             'current_stock' => 'required|integer|min:0',
             'min_stock_alert' => 'nullable|integer|min:0',
-            'status' => 'required|string|in:available,reserved,in_use,lost',
+            'status' => 'required|string|in:available,reserved,in_use,lost,damaged,under_repair,inactive',
         ]);
 
         $item->update([
@@ -107,12 +123,16 @@ class InventoryController extends Controller
             'status' => $validated['status'],
         ]);
 
+        Cache::forget(DashboardController::STATS_CACHE_KEY);
+
         return redirect()->back();
     }
 
     public function destroy(Item $item): RedirectResponse
     {
         $item->delete();
+
+        Cache::forget(DashboardController::STATS_CACHE_KEY);
 
         return redirect()->back();
     }
@@ -138,6 +158,16 @@ class InventoryController extends Controller
         if ($item->min_stock_alert !== null && (int) $item->min_stock_alert > 0
             && (int) $item->quantity <= (int) $item->min_stock_alert) {
             return 'Low Stock';
+        }
+
+        if ($item->status === Item::STATUS_DAMAGED) {
+            return 'Damaged';
+        }
+        if ($item->status === Item::STATUS_UNDER_REPAIR) {
+            return 'Under Repair';
+        }
+        if ($item->status === Item::STATUS_INACTIVE) {
+            return 'Inactive';
         }
 
         if ($item->item_condition === Item::CONDITION_DAMAGED) {

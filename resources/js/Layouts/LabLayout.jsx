@@ -15,8 +15,9 @@ import GlobalNotifications from '@/Components/GlobalNotifications';
 import GlobalChat from '@/Components/GlobalChat';
 
 export default function LabLayout({ children, title }) {
-    const { auth } = usePage().props;
+    const { auth, systemStatus } = usePage().props;
     const user = auth.user;
+    const fullyOperational = systemStatus?.fullyOperational !== false;
 
     const navLinks = [
         { name: 'Dashboard', href: route('dashboard'), icon: LayoutDashboard },
@@ -101,9 +102,17 @@ export default function LabLayout({ children, title }) {
                     <div className="flex items-center gap-4">
                         <div className="hidden md:flex flex-col items-end mr-2">
                             <span className="text-[12px] font-bold text-gray-800 leading-none">System Status</span>
-                            <span className="text-[10px] text-green-500 font-bold flex items-center gap-1">
-                                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                                Fully Operational
+                            <span
+                                className={`text-[10px] font-bold flex items-center gap-1 ${
+                                    fullyOperational ? 'text-green-600' : 'text-red-600'
+                                }`}
+                            >
+                                <span
+                                    className={`h-1.5 w-1.5 rounded-full ${
+                                        fullyOperational ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                                    }`}
+                                />
+                                {fullyOperational ? 'Fully Operational' : 'Critical issues open'}
                             </span>
                         </div>
                         

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import {
     FileText,
@@ -82,24 +82,29 @@ export default function Inventory({ items = [], categories = [], locations = [] 
         });
     };
 
-    const getStatusStyle = (status) => {
+    const getStatusStyle = useCallback((status) => {
         switch (status) {
             case 'Active': return 'text-emerald-700 bg-emerald-50 border-emerald-100';
             case 'Low Stock': return 'text-amber-700 bg-amber-50 border-amber-100';
             case 'Maintenance': return 'text-blue-700 bg-blue-50 border-blue-100';
+            case 'Damaged': return 'text-red-700 bg-red-50 border-red-100';
+            case 'Under Repair': return 'text-yellow-700 bg-yellow-50 border-yellow-100';
+            case 'Inactive': return 'text-gray-600 bg-gray-100 border-gray-200';
             case 'Decommissioned': return 'text-gray-600 bg-gray-100 border-gray-200';
             default: return 'text-gray-600 bg-gray-50 border-gray-100';
         }
-    };
+    }, []);
 
-    const filteredItems = items.filter((item) => {
+    const filteredItems = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return true;
+        if (!q) return items;
 
-        return [item.sku, item.name, item.type, item.location, item.status]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(q));
-    });
+        return items.filter((item) =>
+            [item.sku, item.name, item.type, item.location, item.status]
+                .filter(Boolean)
+                .some((value) => String(value).toLowerCase().includes(q))
+        );
+    }, [items, search]);
 
     return (
         <LabLayout title="Inventory">
@@ -315,6 +320,9 @@ export default function Inventory({ items = [], categories = [], locations = [] 
                                             <option value="reserved">Reserved</option>
                                             <option value="in_use">In Use</option>
                                             <option value="lost">Lost</option>
+                                            <option value="damaged">Damaged</option>
+                                            <option value="under_repair">Under Repair</option>
+                                            <option value="inactive">Inactive</option>
                                         </select>
                                         {errors.status && <p className="mt-1 text-xs text-red-500">{errors.status}</p>}
                                     </div>

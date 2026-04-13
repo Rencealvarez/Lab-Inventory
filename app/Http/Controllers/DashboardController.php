@@ -6,34 +6,46 @@ use App\Models\Item;
 use App\Models\Laboratory;
 use App\Models\Transaction;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    public const STATS_CACHE_KEY = 'dashboard.stats';
+
+    private const STATS_CACHE_TTL_SECONDS = 300;
+
     public function index(): Response
     {
-        $totalItems = Item::query()->count();
-
-        $borrowed = Item::query()
-            ->where('status', Item::STATUS_IN_USE)
-            ->whereRaw('is_decommissioned IS NOT TRUE')
-            ->count();
-
-        $damaged = Item::query()
-            ->where('item_condition', Item::CONDITION_DAMAGED)
-            ->whereRaw('is_decommissioned IS NOT TRUE')
-            ->count();
-
-        $totalUsers = User::query()->count();
+        $stats = Cache::remember(self::STATS_CACHE_KEY, self::STATS_CACHE_TTL_SECONDS, function () {
+            return [
+                'totalItems' => Item::query()->count(),
+                'borrowed' => (int) Transaction::query()
+                    ->whereIn('status', [Transaction::STATUS_ACTIVE, Transaction::STATUS_ISSUED])
+                    ->where('transaction_type', Transaction::TYPE_BORROW)
+                    ->sum('quantity'),
+                'damaged' => Item::query()
+                    ->whereRaw('is_decommissioned IS NOT TRUE')
+                    ->whereIn('status', [
+                        Item::STATUS_DAMAGED,
+                        Item::STATUS_UNDER_REPAIR,
+                    ])
+                    ->count(),
+                'totalUsers' => User::query()->count(),
+            ];
+        });
 
         $recentActivity = Transaction::query()
+            ->select(['id', 'item_id', 'user_id', 'transaction_type', 'transacted_at'])
             ->with([
-                'item.location.laboratory',
-                'user',
+                'item:id,name,location_id',
+                'item.location:id,name,laboratory_id',
+                'item.location.laboratory:id,name',
+                'user:id,name,username,email',
             ])
             ->latest('transacted_at')
-            ->limit(5)
+            ->take(5)
             ->get()
             ->map(function (Transaction $transaction) {
                 $user = $transaction->user;
@@ -48,6 +60,7 @@ class DashboardController extends Controller
                     'lab' => $transaction->item?->location?->laboratory?->name ?? '—',
                     'time' => $transaction->transacted_at?->toIso8601String(),
                     'typeLabel' => match ($transaction->transaction_type) {
+                        Transaction::TYPE_BORROW => 'Borrow',
                         Transaction::TYPE_STOCK_IN => 'Stock in',
                         Transaction::TYPE_STOCK_OUT => 'Stock out',
                         Transaction::TYPE_TRANSFER => 'Transfer',
@@ -60,7 +73,11 @@ class DashboardController extends Controller
             ->all();
 
         $lowStock = Item::query()
-            ->with(['location.laboratory'])
+            ->select(['id', 'name', 'quantity', 'location_id', 'min_stock_alert'])
+            ->with([
+                'location:id,name,laboratory_id',
+                'location.laboratory:id,name',
+            ])
             ->whereRaw('is_decommissioned IS NOT TRUE')
             ->whereNotNull('min_stock_alert')
             ->where('min_stock_alert', '>', 0)
@@ -80,6 +97,7 @@ class DashboardController extends Controller
             ->all();
 
         $laboratoryStatus = Laboratory::query()
+            ->select(['id', 'name', 'status', 'capacity'])
             ->withCount('items')
             ->orderBy('name')
             ->get()
@@ -114,12 +132,7 @@ class DashboardController extends Controller
             ->all();
 
         return Inertia::render('Dashboard', [
-            'stats' => [
-                'totalItems' => $totalItems,
-                'borrowed' => $borrowed,
-                'damaged' => $damaged,
-                'totalUsers' => $totalUsers,
-            ],
+            'stats' => $stats,
             'lowStock' => $lowStock,
             'recentActivity' => $recentActivity,
             'laboratoryStatus' => $laboratoryStatus,

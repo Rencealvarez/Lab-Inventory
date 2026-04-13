@@ -12,27 +12,38 @@ class IncidentReport extends Model
     use HasFactory;
 
     public const SEVERITY_LOW = 'low';
+
     public const SEVERITY_MEDIUM = 'medium';
+
     public const SEVERITY_HIGH = 'high';
+
     public const SEVERITY_CRITICAL = 'critical';
 
     public const STATUS_OPEN = 'open';
+
     public const STATUS_IN_PROGRESS = 'in_progress';
+
     public const STATUS_RESOLVED = 'resolved';
+
     public const STATUS_CLOSED = 'closed';
 
     /**
      * @var list<string>
      */
     protected $fillable = [
+        'item_id',
         'laboratory_id',
         'location_id',
         'reported_by',
         'assigned_to',
         'title',
         'description',
+        'damage_details',
+        'estimated_cost',
         'severity',
         'status',
+        'action_taken',
+        'attachment_path',
         'occurred_at',
         'resolved_at',
     ];
@@ -43,6 +54,7 @@ class IncidentReport extends Model
     protected function casts(): array
     {
         return [
+            'estimated_cost' => 'decimal:2',
             'occurred_at' => 'datetime',
             'resolved_at' => 'datetime',
         ];
@@ -64,6 +76,11 @@ class IncidentReport extends Model
                 self::STATUS_CLOSED,
             ])],
         ];
+    }
+
+    public function item(): BelongsTo
+    {
+        return $this->belongsTo(Item::class);
     }
 
     public function laboratory(): BelongsTo

@@ -1,3 +1,4 @@
+import React, { memo, useMemo } from 'react';
 import { usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
@@ -37,6 +38,78 @@ function formatRelativeTime(isoString) {
     return `${diffDays} ${unit} ago`;
 }
 
+const RecentActivityRow = memo(function RecentActivityRow({ entry }) {
+    return (
+        <li className="flex items-start justify-between rounded-md bg-gray-50 px-3 py-2">
+            <div className="min-w-0 pr-3">
+                <p className="truncate text-sm font-semibold text-gray-800">
+                    {entry.item}
+                </p>
+                <p className="truncate text-sm text-gray-500">
+                    {entry.borrower} · {entry.lab}
+                </p>
+                <p className="mt-0.5 text-[11px] text-gray-400">
+                    {entry.typeLabel}
+                </p>
+            </div>
+            <span className="shrink-0 pl-2 text-sm text-gray-500">
+                {formatRelativeTime(entry.time)}
+            </span>
+        </li>
+    );
+});
+
+const LowStockRow = memo(function LowStockRow({ entry }) {
+    return (
+        <li className="flex items-start justify-between rounded-md bg-gray-50 px-3 py-2">
+            <div className="min-w-0 pr-3">
+                <p className="truncate text-sm font-semibold text-gray-800">
+                    {entry.item}
+                </p>
+                <p className="truncate text-sm text-gray-500">{entry.lab}</p>
+            </div>
+            <span className="shrink-0 pl-2 text-right text-sm font-medium text-red-500">
+                {entry.left} Left
+            </span>
+        </li>
+    );
+});
+
+const LaboratoryStatusCard = memo(function LaboratoryStatusCard({ lab }) {
+    return (
+        <div className="rounded-lg border border-gray-100 bg-gray-50 p-2">
+            <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold text-gray-800">{lab.name}</p>
+                <span
+                    className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${lab.statusTone}`}
+                >
+                    {lab.status}
+                </span>
+            </div>
+
+            <div className="mt-2">
+                <div className="flex items-center justify-between text-[11px] text-gray-600">
+                    <span className="font-medium text-gray-700">Occupancy</span>
+                    <span className="font-medium text-gray-800">{lab.occupancy}%</span>
+                </div>
+                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+                    <div
+                        className="h-full rounded-full bg-blue-500"
+                        style={{
+                            width: `${lab.occupancy}%`,
+                        }}
+                    />
+                </div>
+            </div>
+
+            <div className="mt-2 text-[11px] text-gray-600">
+                Items Assigned:{' '}
+                <span className="font-semibold text-gray-800">{lab.assigned}</span>
+            </div>
+        </div>
+    );
+});
+
 export default function Dashboard({
     stats,
     lowStock,
@@ -48,37 +121,40 @@ export default function Dashboard({
     const displayName =
         user?.name ?? user?.username ?? user?.email ?? 'Admin';
 
-    const summary = stats ?? {};
     const lowStockItems = lowStock ?? [];
     const recentItems = recentActivity ?? [];
     const labs = laboratoryStatus ?? [];
 
-    const summaryCards = [
-        {
-            title: 'Total Items',
-            value: summary.totalItems ?? 0,
-            icon: Package,
-            iconClass: 'bg-blue-100 text-blue-500',
-        },
-        {
-            title: 'Borrowed',
-            value: summary.borrowed ?? 0,
-            icon: ArrowLeftRight,
-            iconClass: 'bg-green-100 text-green-600',
-        },
-        {
-            title: 'Damaged Items',
-            value: summary.damaged ?? 0,
-            icon: AlertTriangle,
-            iconClass: 'bg-red-100 text-red-500',
-        },
-        {
-            title: 'Total Users',
-            value: summary.totalUsers ?? 0,
-            icon: User,
-            iconClass: 'bg-purple-100 text-purple-500',
-        },
-    ];
+    const summaryCards = useMemo(() => {
+        const summary = stats ?? {};
+
+        return [
+            {
+                title: 'Total Items',
+                value: summary.totalItems ?? 0,
+                icon: Package,
+                iconClass: 'bg-blue-100 text-blue-500',
+            },
+            {
+                title: 'Borrowed',
+                value: summary.borrowed ?? 0,
+                icon: ArrowLeftRight,
+                iconClass: 'bg-green-100 text-green-600',
+            },
+            {
+                title: 'Damaged Items',
+                value: summary.damaged ?? 0,
+                icon: AlertTriangle,
+                iconClass: 'bg-red-100 text-red-500',
+            },
+            {
+                title: 'Total Users',
+                value: summary.totalUsers ?? 0,
+                icon: User,
+                iconClass: 'bg-purple-100 text-purple-500',
+            },
+        ];
+    }, [stats]);
 
     return (
         <LabLayout title="Dashboard">
@@ -129,25 +205,7 @@ export default function Dashboard({
                                 </li>
                             ) : (
                                 recentItems.map((entry) => (
-                                    <li
-                                        key={entry.id}
-                                        className="flex items-start justify-between rounded-md bg-gray-50 px-3 py-2"
-                                    >
-                                        <div className="min-w-0 pr-3">
-                                            <p className="truncate text-sm font-semibold text-gray-800">
-                                                {entry.item}
-                                            </p>
-                                            <p className="truncate text-sm text-gray-500">
-                                                {entry.borrower} · {entry.lab}
-                                            </p>
-                                            <p className="mt-0.5 text-[11px] text-gray-400">
-                                                {entry.typeLabel}
-                                            </p>
-                                        </div>
-                                        <span className="shrink-0 pl-2 text-sm text-gray-500">
-                                            {formatRelativeTime(entry.time)}
-                                        </span>
-                                    </li>
+                                    <RecentActivityRow key={entry.id} entry={entry} />
                                 ))
                             )}
                         </ul>
@@ -166,22 +224,7 @@ export default function Dashboard({
                                 </li>
                             ) : (
                                 lowStockItems.map((entry) => (
-                                    <li
-                                        key={entry.id}
-                                        className="flex items-start justify-between rounded-md bg-gray-50 px-3 py-2"
-                                    >
-                                        <div className="min-w-0 pr-3">
-                                            <p className="truncate text-sm font-semibold text-gray-800">
-                                                {entry.item}
-                                            </p>
-                                            <p className="truncate text-sm text-gray-500">
-                                                {entry.lab}
-                                            </p>
-                                        </div>
-                                        <span className="shrink-0 pl-2 text-right text-sm font-medium text-red-500">
-                                            {entry.left} Left
-                                        </span>
-                                    </li>
+                                    <LowStockRow key={entry.id} entry={entry} />
                                 ))
                             )}
                         </ul>
@@ -203,47 +246,7 @@ export default function Dashboard({
                     ) : (
                         <div className="mt-3 grid grid-cols-4 gap-3">
                             {labs.map((lab) => (
-                                <div
-                                    key={lab.id}
-                                    className="rounded-lg border border-gray-100 bg-gray-50 p-2"
-                                >
-                                    <div className="flex items-start justify-between gap-2">
-                                        <p className="text-sm font-semibold text-gray-800">
-                                            {lab.name}
-                                        </p>
-                                        <span
-                                            className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${lab.statusTone}`}
-                                        >
-                                            {lab.status}
-                                        </span>
-                                    </div>
-
-                                    <div className="mt-2">
-                                        <div className="flex items-center justify-between text-[11px] text-gray-600">
-                                            <span className="font-medium text-gray-700">
-                                                Occupancy
-                                            </span>
-                                            <span className="font-medium text-gray-800">
-                                                {lab.occupancy}%
-                                            </span>
-                                        </div>
-                                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
-                                            <div
-                                                className="h-full rounded-full bg-blue-500"
-                                                style={{
-                                                    width: `${lab.occupancy}%`,
-                                                }}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-2 text-[11px] text-gray-600">
-                                        Items Assigned:{' '}
-                                        <span className="font-semibold text-gray-800">
-                                            {lab.assigned}
-                                        </span>
-                                    </div>
-                                </div>
+                                <LaboratoryStatusCard key={lab.id} lab={lab} />
                             ))}
                         </div>
                     )}
