@@ -24,6 +24,19 @@ class HandleInertiaRequests extends Middleware
     }
 
     /**
+     * Handle the incoming request.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \Closure  $next
+     * @return \Symfony\Component\HttpFoundation\Response
+     */
+    public function handle(Request $request, \Closure $next)
+    {
+        sleep(1); // Artificially reduce loading speed
+        return parent::handle($request, $next);
+    }
+
+    /**
      * Define the props that are shared by default.
      *
      * @return array<string, mixed>
