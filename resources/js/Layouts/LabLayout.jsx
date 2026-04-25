@@ -1,5 +1,5 @@
-import React from 'react';
-import { Head, Link, usePage } from '@inertiajs/react';
+import React, { useEffect, useState } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { 
     LayoutDashboard, 
     Package, 
@@ -8,6 +8,7 @@ import {
     FileText, 
     Wrench, 
     Users,
+    GraduationCap,
     LogOut,
     UserCircle
 } from 'lucide-react';
@@ -18,6 +19,7 @@ export default function LabLayout({ children, title }) {
     const { auth, systemStatus } = usePage().props;
     const user = auth.user;
     const fullyOperational = systemStatus?.fullyOperational !== false;
+    const [isNavigating, setIsNavigating] = useState(false);
 
     const navLinks = [
         { name: 'Dashboard', href: route('dashboard'), icon: LayoutDashboard },
@@ -27,7 +29,20 @@ export default function LabLayout({ children, title }) {
         { name: 'Reports', href: route('reports'), icon: FileText },
         { name: 'Maintenance', href: route('maintenance'), icon: Wrench },
         { name: 'Users', href: route('users'), icon: Users },
+        { name: 'Departments', href: route('departments'), icon: GraduationCap },
     ];
+
+    useEffect(() => {
+        const offStart = router.on('start', () => setIsNavigating(true));
+        const offFinish = router.on('finish', () => setIsNavigating(false));
+        const offError = router.on('error', () => setIsNavigating(false));
+
+        return () => {
+            offStart();
+            offFinish();
+            offError();
+        };
+    }, []);
 
     return (
         <div className="flex h-screen w-full bg-[#f4f7fb] text-sm overflow-hidden text-gray-700 font-sans">
@@ -45,14 +60,14 @@ export default function LabLayout({ children, title }) {
                 <nav className="flex-1 flex flex-col gap-2 overflow-y-auto custom-scrollbar">
                     {navLinks.map((link) => {
                         const Icon = link.icon;
-                        const isActive = route().current(link.href.split('/').pop()) || (link.name === 'Maintenance' && route().current('maintenance'));
-                        // Actually let's use a simpler current route check
                         const active = window.location.pathname === new URL(link.href).pathname;
 
                         return (
                             <Link
                                 key={link.name}
                                 href={link.href}
+                                prefetch
+                                cacheFor="5m"
                                 className={`flex items-center gap-3 space-x-3 rounded-xl px-4 py-3 transition-all duration-200 group ${
                                     active 
                                     ? 'bg-white text-[#3f59a3] font-bold shadow-md' 
@@ -67,7 +82,12 @@ export default function LabLayout({ children, title }) {
                 </nav>
 
                 <div className="mt-auto pt-6 border-t border-white/10">
-                    <Link href={route('profile.show')} className="flex items-center gap-3 px-3 py-3 rounded-xl bg-black/10 mb-4 hover:bg-black/20 transition-colors group cursor-pointer border border-transparent hover:border-white/10 shadow-sm">
+                    <Link
+                        href={route('profile.show')}
+                        prefetch
+                        cacheFor="2m"
+                        className="flex items-center gap-3 px-3 py-3 rounded-xl bg-black/10 mb-4 hover:bg-black/20 transition-colors group cursor-pointer border border-transparent hover:border-white/10 shadow-sm"
+                    >
                         <div className="h-9 w-9 rounded-full bg-[#4663ac] flex items-center justify-center border border-white/20 shadow-inner group-hover:scale-105 transition-transform">
                             <UserCircle className="h-6 w-6 text-blue-100" />
                         </div>
@@ -91,14 +111,13 @@ export default function LabLayout({ children, title }) {
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-                {/* Top Header / Bar */}
-                <header className="h-16 shrink-0 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-8 z-10">
-                    <div className="flex items-center gap-2">
-                        <span className="text-gray-400 font-medium">Pages</span>
-                        <span className="text-gray-400">/</span>
-                        <span className="text-gray-800 font-bold">{title}</span>
+                {isNavigating && (
+                    <div className="absolute inset-x-0 top-0 z-20 h-0.5 overflow-hidden">
+                        <div className="h-full w-1/3 animate-pulse rounded bg-[#4663ac]" />
                     </div>
-                    
+                )}
+                {/* Top Header / Bar */}
+                <header className="h-16 shrink-0 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-end px-8 z-10">
                     <div className="flex items-center gap-4">
                         <div className="hidden md:flex flex-col items-end mr-2">
                             <span className="text-[12px] font-bold text-gray-800 leading-none">System Status</span>
@@ -124,7 +143,11 @@ export default function LabLayout({ children, title }) {
                 </header>
 
                 {/* Page Content */}
-                <main className="flex-1 overflow-auto bg-[#f8fafc]/50 p-0 shadow-inner">
+                <main
+                    className={`flex-1 overflow-auto bg-[#f8fafc]/50 p-0 shadow-inner transition-opacity duration-150 ${
+                        isNavigating ? 'opacity-90' : 'opacity-100'
+                    }`}
+                >
                     {children}
                 </main>
 

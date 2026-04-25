@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\IncidentReport;
 use App\Models\Item;
 use App\Models\Transaction;
+use App\Models\User;
+use App\Notifications\SystemAlertNotification;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
@@ -50,6 +52,11 @@ class ReportController extends Controller
             'rows' => $rows,
         ])->setPaper('a4', 'landscape');
 
+        $this->sendSystemAlert(
+            'System Alert',
+            'Inventory report is now available',
+        );
+
         return $pdf->stream('lab-inventory-report.pdf');
     }
 
@@ -87,6 +94,11 @@ class ReportController extends Controller
             'generatedAt' => $this->formattedGeneratedAt(),
             'rows' => $rows,
         ])->setPaper('a4', 'landscape');
+
+        $this->sendSystemAlert(
+            'System Alert',
+            'Transaction report is now available',
+        );
 
         return $pdf->stream('lab-transactions-report.pdf');
     }
@@ -128,7 +140,20 @@ class ReportController extends Controller
             'rows' => $rows,
         ])->setPaper('a4', 'landscape');
 
+        $this->sendSystemAlert(
+            'System Alert',
+            'Maintenance report is now available',
+        );
+
         return $pdf->stream('lab-maintenance-report.pdf');
+    }
+
+    private function sendSystemAlert(string $title, string $message): void
+    {
+        User::query()
+            ->where('status', User::STATUS_ACTIVE)
+            ->where('role', User::ROLE_ADMIN)
+            ->each(fn (User $admin) => $admin->notify(new SystemAlertNotification($title, $message)));
     }
 
     private function formattedGeneratedAt(): string

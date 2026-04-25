@@ -1,55 +1,22 @@
 import React, { useState } from 'react';
-import { Head, Link, usePage } from '@inertiajs/react';
-import { 
-    Search,
-    Bell,
-    ChevronDown,
-    Mail,
-    Plus,
-    Edit3,
-    Check,
-    X
-} from 'lucide-react';
+import { Head, useForm, usePage } from '@inertiajs/react';
+import { ChevronDown, Mail, Plus, Edit3, Check, X } from 'lucide-react';
 import LabLayout from '@/Layouts/LabLayout';
 
-export default function Show() {
-    const { auth } = usePage().props;
-    const user = auth.user;
-
-    const [isEditing, setIsEditing] = useState(false);
-    const [profile, setProfile] = useState({
-        fullName: user.name || 'Hector Ryan M. Par', 
-        nickName: 'Ryan',
-        role: 'Administrator',
-        gender: 'Male',
-        department: 'Science Department',
-        email: user.email || 'alexarawles@gmail.com'
-    });
-
-    const [tempProfile, setTempProfile] = useState({ ...profile });
-
-    const handleSave = () => {
-        setProfile({ ...tempProfile });
-        setIsEditing(false);
-    };
-
-    const handleCancel = () => {
-        setTempProfile({ ...profile });
-        setIsEditing(false);
-    };
-
-    const InputField = ({ label, value, onChange, placeholder, isDropdown = false, id, options = [] }) => (
+function InputField({ label, value, onChange, placeholder, isDropdown = false, id, options = [], isEditing }) {
+    return (
         <div className="flex flex-col gap-2">
             <label htmlFor={id} className="text-[14px] font-medium text-gray-700">{label}</label>
             <div className="relative">
                 {isEditing && isDropdown ? (
                     <select
                         id={id}
-                        value={value}
+                        value={value ?? ''}
                         onChange={(e) => onChange(e.target.value)}
                         className="w-full px-4 py-3 rounded-xl border-none bg-[#f8fafc] text-[14px] text-gray-800 focus:ring-2 focus:ring-[#4663ac]/20 transition-all appearance-none cursor-pointer"
                     >
-                        {options.map(opt => (
+                        <option value="">Select {label.toLowerCase()}</option>
+                        {options.map((opt) => (
                             <option key={opt} value={opt}>{opt}</option>
                         ))}
                     </select>
@@ -72,6 +39,38 @@ export default function Show() {
             </div>
         </div>
     );
+}
+
+export default function Show({ user: userProp }) {
+    const { auth } = usePage().props;
+    const user = userProp ?? auth.user ?? {};
+
+    const [isEditing, setIsEditing] = useState(false);
+    const initialValues = {
+        name: user.name ?? '',
+        nickname: user.nickname ?? '',
+        role: user.role ?? '',
+        gender: user.gender ?? '',
+        department: user.department ?? '',
+        email: user.email ?? '',
+    };
+
+    const { data, setData, patch, processing, reset } = useForm({
+        ...initialValues,
+    });
+
+    const handleSave = () => {
+        patch(route('profile.update'), {
+            preserveScroll: true,
+            onSuccess: () => setIsEditing(false),
+        });
+    };
+
+    const handleCancel = () => {
+        reset();
+        setData({ ...initialValues });
+        setIsEditing(false);
+    };
 
     return (
         <LabLayout title="Profile Settings">
@@ -91,15 +90,15 @@ export default function Show() {
                             <div className="flex items-end gap-5">
                                 <div className="h-[120px] w-[120px] rounded-full border-[6px] border-white shadow-lg overflow-hidden bg-white shrink-0">
                                     <img 
-                                        src={`https://ui-avatars.com/api/?name=${profile.fullName}&background=4663ac&color=fff&size=120`} 
+                                        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(data.name || 'User')}&background=4663ac&color=fff&size=120`} 
                                         alt="Avatar" 
                                         className="w-full h-full object-cover"
                                     />
                                 </div>
                                 <div className="pb-1">
-                                    <h2 className="text-[22px] font-bold text-gray-900 leading-tight">{profile.fullName}</h2>
-                                    <p className="text-[#4663ac] text-[12px] font-bold mt-0.5 uppercase tracking-widest opacity-90 leading-none">{profile.role}</p>
-                                    <p className="text-gray-400 text-[13px] mt-1 leading-none">{profile.email}</p>
+                                    <h2 className="text-[22px] font-bold text-gray-900 leading-tight">{data.name || 'No Name'}</h2>
+                                    <p className="text-[#4663ac] text-[12px] font-bold mt-0.5 uppercase tracking-widest opacity-90 leading-none">{data.role || 'No Role'}</p>
+                                    <p className="text-gray-400 text-[13px] mt-1 leading-none">{data.email || 'No Email'}</p>
                                 </div>
                             </div>
 
@@ -108,12 +107,14 @@ export default function Show() {
                                     <>
                                         <button 
                                             onClick={handleSave}
+                                            disabled={processing}
                                             className="flex items-center gap-2 bg-[#4663ac] text-white px-6 py-2.5 rounded-xl font-semibold text-sm hover:shadow-lg hover:shadow-blue-200 transition-all active:scale-95"
                                         >
-                                            <Check className="w-4 h-4" /> Save Changes
+                                            <Check className="w-4 h-4" /> {processing ? 'Saving...' : 'Save Changes'}
                                         </button>
                                         <button 
                                             onClick={handleCancel}
+                                            disabled={processing}
                                             className="flex items-center gap-2 bg-gray-100 text-gray-600 px-6 py-2.5 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-all"
                                         >
                                             <X className="w-4 h-4" /> Cancel
@@ -134,35 +135,40 @@ export default function Show() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 mb-12">
                             <InputField 
                                 label="Full Name" 
-                                value={isEditing ? tempProfile.fullName : profile.fullName}
-                                onChange={(val) => setTempProfile({...tempProfile, fullName: val})}
-                                id="fullName"
+                                value={data.name}
+                                onChange={(val) => setData('name', val)}
+                                id="name"
+                                isEditing={isEditing}
                             />
                             <InputField 
                                 label="Nick Name" 
-                                value={isEditing ? tempProfile.nickName : profile.nickName}
-                                onChange={(val) => setTempProfile({...tempProfile, nickName: val})}
-                                id="nickName"
+                                value={data.nickname}
+                                onChange={(val) => setData('nickname', val)}
+                                id="nickname"
+                                isEditing={isEditing}
                             />
                             <InputField 
                                 label="Gender" 
-                                value={isEditing ? tempProfile.gender : profile.gender}
-                                onChange={(val) => setTempProfile({...tempProfile, gender: val})}
+                                value={data.gender}
+                                onChange={(val) => setData('gender', val)}
                                 isDropdown={true}
-                                options={['Male', 'Female', 'Rather not say']}
+                                options={['Male', 'Female', 'Rather not say', 'Other']}
                                 id="gender"
+                                isEditing={isEditing}
                             />
                             <InputField 
                                 label="Role" 
-                                value={isEditing ? tempProfile.role : profile.role}
-                                onChange={(val) => setTempProfile({...tempProfile, role: val})}
+                                value={data.role}
+                                onChange={(val) => setData('role', val)}
                                 id="role"
+                                isEditing={isEditing}
                             />
                             <InputField 
                                 label="Department" 
-                                value={isEditing ? tempProfile.department : profile.department}
-                                onChange={(val) => setTempProfile({...tempProfile, department: val})}
+                                value={data.department}
+                                onChange={(val) => setData('department', val)}
                                 id="department"
+                                isEditing={isEditing}
                             />
                         </div>
 
@@ -176,7 +182,7 @@ export default function Show() {
                                         <Mail className="w-5 h-5" />
                                     </div>
                                     <div>
-                                        <p className="text-[14px] font-bold text-gray-800">{profile.email}</p>
+                                        <p className="text-[14px] font-bold text-gray-800">{data.email || 'No Email'}</p>
                                         <p className="text-[12px] text-gray-400 mt-0.5">Primary • Verified</p>
                                     </div>
                                 </div>

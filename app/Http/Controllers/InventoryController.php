@@ -13,48 +13,58 @@ use Inertia\Response;
 
 class InventoryController extends Controller
 {
+    private const ITEMS_CACHE_KEY = 'inventory:index:items';
+
+    private const CATEGORIES_CACHE_KEY = 'inventory:index:categories';
+
+    private const LOCATIONS_CACHE_KEY = 'inventory:index:locations';
+
     public function index(): Response
     {
-        $items = Item::query()
-            ->select([
-                'id',
-                'sku',
-                'name',
-                'category_id',
-                'quantity',
-                'min_stock_alert',
-                'location_id',
-                'status',
-                'item_condition',
-                'is_decommissioned',
-            ])
-            ->with([
-                'category:id,name',
-                'location:id,name,laboratory_id',
-                'location.laboratory:id,name',
-            ])
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Item $item) => [
-                'id' => $item->id,
-                'sku' => $item->sku,
-                'name' => $item->name,
-                'type' => $item->category?->name ?? '—',
-                'category_id' => $item->category_id,
-                'stock' => (int) $item->quantity,
-                'min_stock_alert' => $item->min_stock_alert !== null
-                    ? (int) $item->min_stock_alert
-                    : null,
-                'location' => $this->formatLocationLabel($item),
-                'location_id' => $item->location_id,
-                'status' => $this->displayStatus($item),
-                'status_raw' => $item->status,
-            ]);
+        $items = Cache::remember(self::ITEMS_CACHE_KEY, now()->addSeconds(30), function () {
+            return Item::query()
+                ->select([
+                    'id',
+                    'sku',
+                    'name',
+                    'category_id',
+                    'quantity',
+                    'min_stock_alert',
+                    'location_id',
+                    'status',
+                    'item_condition',
+                    'is_decommissioned',
+                ])
+                ->with([
+                    'category:id,name',
+                    'location:id,name,laboratory_id',
+                    'location.laboratory:id,name',
+                ])
+                ->orderBy('name')
+                ->get()
+                ->map(fn (Item $item) => [
+                    'id' => $item->id,
+                    'sku' => $item->sku,
+                    'name' => $item->name,
+                    'type' => $item->category?->name ?? '—',
+                    'category_id' => $item->category_id,
+                    'stock' => (int) $item->quantity,
+                    'min_stock_alert' => $item->min_stock_alert !== null
+                        ? (int) $item->min_stock_alert
+                        : null,
+                    'location' => $this->formatLocationLabel($item),
+                    'location_id' => $item->location_id,
+                    'status' => $this->displayStatus($item),
+                    'status_raw' => $item->status,
+                ]);
+        });
 
-        return Inertia::render('Inventory', [
-            'items' => $items,
-            'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
-            'locations' => Location::query()
+        $categories = Cache::remember(self::CATEGORIES_CACHE_KEY, now()->addMinutes(5), fn () => Category::query()
+            ->orderBy('name')
+            ->get(['id', 'name']));
+
+        $locations = Cache::remember(self::LOCATIONS_CACHE_KEY, now()->addMinutes(5), function () {
+            return Location::query()
                 ->with('laboratory:id,name')
                 ->orderBy('name')
                 ->get(['id', 'name', 'laboratory_id'])
@@ -62,7 +72,13 @@ class InventoryController extends Controller
                     'id' => $location->id,
                     'name' => $location->name,
                     'laboratory' => $location->laboratory?->name,
-                ]),
+                ]);
+        });
+
+        return Inertia::render('Inventory', [
+            'items' => $items,
+            'categories' => $categories,
+            'locations' => $locations,
         ]);
     }
 
@@ -94,6 +110,7 @@ class InventoryController extends Controller
         ]);
 
         Cache::forget(DashboardController::STATS_CACHE_KEY);
+        $this->forgetInventoryCaches();
 
         return redirect()->back();
     }
@@ -124,6 +141,7 @@ class InventoryController extends Controller
         ]);
 
         Cache::forget(DashboardController::STATS_CACHE_KEY);
+        $this->forgetInventoryCaches();
 
         return redirect()->back();
     }
@@ -133,8 +151,16 @@ class InventoryController extends Controller
         $item->delete();
 
         Cache::forget(DashboardController::STATS_CACHE_KEY);
+        $this->forgetInventoryCaches();
 
         return redirect()->back();
+    }
+
+    private function forgetInventoryCaches(): void
+    {
+        Cache::forget(self::ITEMS_CACHE_KEY);
+        Cache::forget(self::CATEGORIES_CACHE_KEY);
+        Cache::forget(self::LOCATIONS_CACHE_KEY);
     }
 
     private function formatLocationLabel(Item $item): string

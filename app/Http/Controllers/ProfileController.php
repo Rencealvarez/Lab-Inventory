@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\ProfileUpdateRequest;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,6 +12,21 @@ use Inertia\Response;
 
 class ProfileController extends Controller
 {
+    public function show(Request $request): Response
+    {
+        return Inertia::render('Profile/Show', [
+            'user' => $request->user()?->only([
+                'id',
+                'name',
+                'email',
+                'nickname',
+                'gender',
+                'department',
+                'role',
+            ]),
+        ]);
+    }
+
     /**
      * Display the user's profile form.
      */
@@ -27,9 +41,22 @@ class ProfileController extends Controller
     /**
      * Update the user's profile information.
      */
-    public function update(ProfileUpdateRequest $request): RedirectResponse
+    public function update(Request $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'nickname' => ['nullable', 'string', 'max:100'],
+            'gender' => ['nullable', 'string', 'max:30'],
+            'department' => ['nullable', 'string', 'max:120'],
+            'role' => ['nullable', 'string', 'max:30'],
+            'email' => ['required', 'string', 'email', 'max:255'],
+        ]);
+
+        if (! $request->filled('gender')) {
+            unset($validated['gender']);
+        }
+
+        $request->user()->fill($validated);
 
         if ($request->user()->isDirty('email')) {
             $request->user()->email_verified_at = null;
@@ -37,7 +64,7 @@ class ProfileController extends Controller
 
         $request->user()->save();
 
-        return Redirect::route('profile.edit');
+        return Redirect::back()->with('success', 'Profile updated successfully.');
     }
 
     /**

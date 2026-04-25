@@ -16,7 +16,7 @@ class UserController extends Controller
     public function index(): Response
     {
         $users = User::query()
-            ->with(['department:id,name'])
+            ->with(['departmentRelation:id,name'])
             ->orderByRaw('COALESCE(name, username, email)')
             ->get()
             ->map(fn (User $user) => [
@@ -27,7 +27,7 @@ class UserController extends Controller
                 'username' => $user->username,
                 'role' => $user->role,
                 'status' => $user->status ?? 'active',
-                'department' => $user->department?->name ?? '—',
+                'department' => $user->departmentRelation?->name ?? $user->department ?? '—',
                 'department_id' => $user->department_id,
             ])
             ->values()

@@ -121,8 +121,10 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
     const submitReport = (e) => {
         e.preventDefault();
         post(route('maintenance.store'), {
+            preserveState: true,
             preserveScroll: true,
             forceFormData: true,
+            only: ['inventoryItems', 'incidents', 'flash', 'errors', 'systemStatus'],
             onSuccess: () => {
                 closeIncidentModal();
                 reset({
@@ -179,7 +181,9 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
             route('maintenance.resolve', confirmResolveId),
             {},
             {
+                preserveState: true,
                 preserveScroll: true,
+                only: ['inventoryItems', 'incidents', 'flash', 'errors', 'systemStatus'],
                 onSuccess: () => {
                     setConfirmResolveId(null);
                 },
@@ -283,7 +287,7 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
                                 {incidents.length === 0 ? (
                                     <tr>
                                         <td colSpan={11} className="px-4 py-10 text-center text-sm text-gray-500">
-                                            No incident reports yet. File one using &ldquo;Report Incident&rdquo;.
+                                            No incident reports yet.
                                         </td>
                                     </tr>
                                 ) : filteredIncidents.length === 0 ? (

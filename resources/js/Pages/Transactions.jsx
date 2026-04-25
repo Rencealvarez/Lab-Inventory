@@ -85,7 +85,9 @@ export default function Transactions({ items = [], transactions: transactionsPro
             return;
         }
         post(route('transactions.store'), {
+            preserveState: true,
             preserveScroll: true,
+            only: ['transactions', 'items', 'borrowers', 'flash', 'errors', 'systemStatus'],
             onSuccess: () => {
                 closeModal();
                 reset({
@@ -104,7 +106,9 @@ export default function Transactions({ items = [], transactions: transactionsPro
     const handleReturnItem = (transactionId) => {
         setReturningId(transactionId);
         router.patch(route('transactions.return', transactionId), {}, {
+            preserveState: true,
             preserveScroll: true,
+            only: ['transactions', 'items', 'borrowers', 'flash', 'errors', 'systemStatus'],
             onFinish: () => setReturningId(null),
         });
     };
