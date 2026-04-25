@@ -23,7 +23,7 @@ class HandleInertiaRequests extends Middleware
     {
         return parent::version($request);
     }
-
+    
     /**
      * Define the props that are shared by default.
      *
