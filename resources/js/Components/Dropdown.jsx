@@ -38,6 +38,7 @@ const Trigger = ({ children }) => {
 const Content = ({
     align = 'right',
     width = '48',
+    className = '',
     contentClasses = 'py-1 bg-white',
     children,
 }) => {
@@ -55,6 +56,8 @@ const Content = ({
 
     if (width === '48') {
         widthClasses = 'w-48';
+    } else if (width === '80') {
+        widthClasses = 'w-80';
     }
 
     return (
@@ -69,8 +72,7 @@ const Content = ({
                 leaveTo="opacity-0 scale-95"
             >
                 <div
-                    className={`absolute z-50 mt-2 rounded-md shadow-lg ${alignmentClasses} ${widthClasses}`}
-                    onClick={() => setOpen(false)}
+                    className={`absolute z-50 mt-2 rounded-md shadow-lg ${alignmentClasses} ${widthClasses} ${className}`}
                 >
                     <div
                         className={

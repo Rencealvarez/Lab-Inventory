@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Item;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Notifications\NewTransactionNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -16,9 +17,15 @@ use Inertia\Response;
 
 class TransactionController extends Controller
 {
+    private const ITEMS_CACHE_KEY = 'transactions:index:items';
+
+    private const BORROWERS_CACHE_KEY = 'transactions:index:borrowers';
+
+    private const TRANSACTIONS_CACHE_KEY = 'transactions:index:list';
+
     public function index(): Response
     {
-        $items = Item::query()
+        $items = Cache::remember(self::ITEMS_CACHE_KEY, now()->addSeconds(30), fn () => Item::query()
             ->active()
             ->orderBy('name')
             ->get(['id', 'name', 'sku', 'quantity'])
@@ -29,9 +36,9 @@ class TransactionController extends Controller
                 'stock' => (int) $item->quantity,
             ])
             ->values()
-            ->all();
+            ->all());
 
-        $borrowers = User::query()
+        $borrowers = Cache::remember(self::BORROWERS_CACHE_KEY, now()->addMinutes(2), fn () => User::query()
             ->where('status', User::STATUS_ACTIVE)
             ->orderByRaw('COALESCE(name, username, email)')
             ->get(['id', 'name', 'username', 'email', 'id_number'])
@@ -41,47 +48,49 @@ class TransactionController extends Controller
                 'id_number' => $u->id_number,
             ])
             ->values()
-            ->all();
+            ->all());
 
-        $transactions = Transaction::query()
-            ->with(['item', 'user'])
-            ->latest('transacted_at')
-            ->limit(100)
-            ->get()
-            ->map(function (Transaction $transaction) {
-                $user = $transaction->user;
+        $transactions = Cache::remember(self::TRANSACTIONS_CACHE_KEY, now()->addSeconds(20), function () {
+            return Transaction::query()
+                ->with(['item', 'user'])
+                ->latest('transacted_at')
+                ->limit(100)
+                ->get()
+                ->map(function (Transaction $transaction) {
+                    $user = $transaction->user;
 
-                return [
-                    'id' => $transaction->id,
-                    'displayId' => 'TRX-'.str_pad((string) $transaction->id, 3, '0', STR_PAD_LEFT),
-                    'item' => $transaction->item?->name ?? '—',
-                    'user' => $user?->name
-                        ?? $user?->username
-                        ?? $user?->email
-                        ?? '—',
-                    'type' => match ($transaction->transaction_type) {
-                        Transaction::TYPE_BORROW => 'Borrow',
-                        Transaction::TYPE_STOCK_IN => 'Stock in',
-                        Transaction::TYPE_STOCK_OUT => 'Stock out',
-                        Transaction::TYPE_TRANSFER => 'Transfer',
-                        Transaction::TYPE_ADJUSTMENT => 'Adjustment',
-                        default => ucfirst(str_replace('_', ' ', (string) $transaction->transaction_type)),
-                    },
-                    'borrowDate' => $transaction->transacted_at?->format('Y-m-d') ?? '—',
-                    'returnDate' => $transaction->expected_return_date
-                        ? $transaction->expected_return_date->format('Y-m-d')
-                        : '—',
-                    'status' => ucfirst((string) $transaction->status),
-                    'conditionOut' => '—',
-                    'canReturnItem' => $transaction->transaction_type === Transaction::TYPE_BORROW
-                        && in_array($transaction->status, [
-                            Transaction::STATUS_ISSUED,
-                            Transaction::STATUS_ACTIVE,
-                        ], true),
-                ];
-            })
-            ->values()
-            ->all();
+                    return [
+                        'id' => $transaction->id,
+                        'displayId' => 'TRX-'.str_pad((string) $transaction->id, 3, '0', STR_PAD_LEFT),
+                        'item' => $transaction->item?->name ?? '—',
+                        'user' => $user?->name
+                            ?? $user?->username
+                            ?? $user?->email
+                            ?? '—',
+                        'type' => match ($transaction->transaction_type) {
+                            Transaction::TYPE_BORROW => 'Borrow',
+                            Transaction::TYPE_STOCK_IN => 'Stock in',
+                            Transaction::TYPE_STOCK_OUT => 'Stock out',
+                            Transaction::TYPE_TRANSFER => 'Transfer',
+                            Transaction::TYPE_ADJUSTMENT => 'Adjustment',
+                            default => ucfirst(str_replace('_', ' ', (string) $transaction->transaction_type)),
+                        },
+                        'borrowDate' => $transaction->transacted_at?->format('Y-m-d') ?? '—',
+                        'returnDate' => $transaction->expected_return_date
+                            ? $transaction->expected_return_date->format('Y-m-d')
+                            : '—',
+                        'status' => ucfirst((string) $transaction->status),
+                        'conditionOut' => '—',
+                        'canReturnItem' => $transaction->transaction_type === Transaction::TYPE_BORROW
+                            && in_array($transaction->status, [
+                                Transaction::STATUS_ISSUED,
+                                Transaction::STATUS_ACTIVE,
+                            ], true),
+                    ];
+                })
+                ->values()
+                ->all();
+        });
 
         return Inertia::render('Transactions', [
             'items' => $items,
@@ -107,7 +116,9 @@ class TransactionController extends Controller
         ]);
 
         try {
-            DB::transaction(function () use ($validated) {
+            $createdTransaction = null;
+
+            DB::transaction(function () use ($validated, &$createdTransaction) {
                 /** @var Item $item */
                 $item = Item::query()
                     ->lockForUpdate()
@@ -119,7 +130,7 @@ class TransactionController extends Controller
                     ]);
                 }
 
-                Transaction::create([
+                $createdTransaction = Transaction::create([
                     'item_id' => $item->id,
                     'user_id' => (int) $validated['user_id'],
                     'transaction_type' => $validated['transaction_type'],
@@ -135,11 +146,20 @@ class TransactionController extends Controller
                 $item->quantity = $item->quantity - $validated['quantity'];
                 $item->save();
             });
+
+            if ($createdTransaction) {
+                $createdTransaction->loadMissing(['item:id,name,sku', 'user:id,name,username,email']);
+                User::query()
+                    ->where('status', User::STATUS_ACTIVE)
+                    ->where('role', User::ROLE_ADMIN)
+                    ->each(fn (User $admin) => $admin->notify(new NewTransactionNotification($createdTransaction)));
+            }
         } catch (ValidationException $e) {
             return redirect()->back()->withErrors($e->errors())->withInput();
         }
 
         Cache::forget(DashboardController::STATS_CACHE_KEY);
+        $this->forgetTransactionCaches();
 
         return redirect()->back()->with('success', 'Transaction recorded successfully.');
     }
@@ -183,7 +203,15 @@ class TransactionController extends Controller
         }
 
         Cache::forget(DashboardController::STATS_CACHE_KEY);
+        $this->forgetTransactionCaches();
 
         return redirect()->back()->with('success', 'Item returned successfully.');
+    }
+
+    private function forgetTransactionCaches(): void
+    {
+        Cache::forget(self::ITEMS_CACHE_KEY);
+        Cache::forget(self::BORROWERS_CACHE_KEY);
+        Cache::forget(self::TRANSACTIONS_CACHE_KEY);
     }
 }

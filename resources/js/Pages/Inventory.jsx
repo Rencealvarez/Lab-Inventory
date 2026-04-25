@@ -61,6 +61,9 @@ export default function Inventory({ items = [], categories = [], locations = [] 
         e.preventDefault();
         if (selectedItem) {
             router.put(route('inventory.update', selectedItem.id), data, {
+                preserveState: true,
+                preserveScroll: true,
+                only: ['items', 'categories', 'locations', 'flash', 'errors', 'systemStatus'],
                 onSuccess: () => closeModal(),
             });
 
@@ -68,6 +71,9 @@ export default function Inventory({ items = [], categories = [], locations = [] 
         }
 
         post(route('inventory.store'), {
+            preserveState: true,
+            preserveScroll: true,
+            only: ['items', 'categories', 'locations', 'flash', 'errors', 'systemStatus'],
             onSuccess: () => closeModal(),
         });
     };
@@ -78,7 +84,9 @@ export default function Inventory({ items = [], categories = [], locations = [] 
         }
 
         router.delete(route('inventory.destroy', item.id), {
+            preserveState: true,
             preserveScroll: true,
+            only: ['items', 'categories', 'locations', 'flash', 'errors', 'systemStatus'],
         });
     };
 

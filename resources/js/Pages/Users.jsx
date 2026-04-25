@@ -3,12 +3,9 @@ import { Head, router, useForm, usePage } from '@inertiajs/react';
 import {
     Users as UsersIcon,
     Plus,
-    MoreVertical,
     Search,
     XCircle,
     CheckCircle2,
-    Pencil,
-    Trash2,
 } from 'lucide-react';
 
 import LabLayout from '@/Layouts/LabLayout';
@@ -49,7 +46,6 @@ export default function Users({ users: usersProp = [], departments = [] }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [search, setSearch] = useState('');
-    const [openMenuId, setOpenMenuId] = useState(null);
     const [toast, setToast] = useState(null);
 
     const form = useForm(emptyFormState);
@@ -124,18 +120,17 @@ export default function Users({ users: usersProp = [], departments = [] }) {
     const openAdd = () => {
         setEditingId(null);
         form.clearErrors();
-        form.reset(emptyFormState);
+        form.setData({ ...emptyFormState });
         setIsModalOpen(true);
     };
 
     const openEdit = (user) => {
-        setOpenMenuId(null);
         setEditingId(user.id);
         const parts = (user.name || '').trim().split(/\s+/);
         const first = parts[0] || '';
         const last = parts.slice(1).join(' ') || '';
         form.clearErrors();
-        form.reset({
+        form.setData({
             ...emptyFormState,
             first_name: first,
             last_name: last,
@@ -161,7 +156,7 @@ export default function Users({ users: usersProp = [], departments = [] }) {
             preserveScroll: true,
             onSuccess: () => {
                 closeModal();
-                form.reset(emptyFormState);
+                form.setData({ ...emptyFormState });
             },
         };
 
@@ -173,7 +168,6 @@ export default function Users({ users: usersProp = [], departments = [] }) {
     };
 
     const confirmDelete = (user) => {
-        setOpenMenuId(null);
         if (!window.confirm(`Remove user ${user.name}? This cannot be undone.`)) return;
         router.delete(route('users.destroy', user.id), { preserveScroll: true });
     };
@@ -285,45 +279,21 @@ export default function Users({ users: usersProp = [], departments = [] }) {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="relative flex items-center justify-center mx-auto w-8 h-8">
+                                                <div className="flex items-center justify-end gap-2 pr-2">
                                                     <button
                                                         type="button"
-                                                        onClick={() =>
-                                                            setOpenMenuId((id) => (id === user.id ? null : user.id))
-                                                        }
-                                                        className="rounded-full p-1.5 text-gray-400 hover:bg-[#f1f5f9] hover:text-gray-600"
-                                                        aria-label="User actions"
+                                                        onClick={() => openEdit(user)}
+                                                        className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50"
                                                     >
-                                                        <MoreVertical className="h-[18px] w-[18px]" />
+                                                        Edit
                                                     </button>
-                                                    {openMenuId === user.id && (
-                                                        <>
-                                                            <button
-                                                                type="button"
-                                                                className="fixed inset-0 z-40 cursor-default"
-                                                                aria-hidden
-                                                                onClick={() => setOpenMenuId(null)}
-                                                            />
-                                                            <div className="absolute right-0 top-full z-50 mt-1 w-40 rounded-lg border border-[#e2e8f0] bg-white py-1 shadow-lg">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => openEdit(user)}
-                                                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-gray-700 hover:bg-gray-50"
-                                                                >
-                                                                    <Pencil className="h-3.5 w-3.5" />
-                                                                    Edit
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => confirmDelete(user)}
-                                                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-red-600 hover:bg-red-50"
-                                                                >
-                                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                                    Delete
-                                                                </button>
-                                                            </div>
-                                                        </>
-                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => confirmDelete(user)}
+                                                        className="rounded-md border border-red-100 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-100"
+                                                    >
+                                                        Delete
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -370,7 +340,7 @@ export default function Users({ users: usersProp = [], departments = [] }) {
                                                     value={form.data.first_name}
                                                     onChange={(e) => form.setData('first_name', e.target.value)}
                                                     className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors"
-                                                    placeholder="e.g. John"
+                                                    placeholder="First Name"
                                                     required
                                                 />
                                                 {form.errors.first_name && (
@@ -386,7 +356,7 @@ export default function Users({ users: usersProp = [], departments = [] }) {
                                                     value={form.data.last_name}
                                                     onChange={(e) => form.setData('last_name', e.target.value)}
                                                     className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors"
-                                                    placeholder="e.g. Doe"
+                                                    placeholder="Last Name"
                                                     required
                                                 />
                                                 {form.errors.last_name && (
@@ -403,7 +373,7 @@ export default function Users({ users: usersProp = [], departments = [] }) {
                                                 value={form.data.email}
                                                 onChange={(e) => form.setData('email', e.target.value)}
                                                 className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors"
-                                                placeholder="e.g. user@lab.edu"
+                                                placeholder="Email Address"
                                                 required
                                             />
                                             {form.errors.email && (
@@ -420,7 +390,7 @@ export default function Users({ users: usersProp = [], departments = [] }) {
                                                     value={form.data.id_number}
                                                     onChange={(e) => form.setData('id_number', e.target.value)}
                                                     className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors"
-                                                    placeholder="e.g. STU-105"
+                                                    placeholder="ID Number"
                                                     required
                                                 />
                                                 {form.errors.id_number && (
@@ -436,7 +406,7 @@ export default function Users({ users: usersProp = [], departments = [] }) {
                                                     value={form.data.username}
                                                     onChange={(e) => form.setData('username', e.target.value)}
                                                     className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors"
-                                                    placeholder="e.g. jdoe123"
+                                                    placeholder="Username"
                                                     required
                                                 />
                                                 {form.errors.username && (

@@ -1,9 +1,11 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\FacilitiesController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\MaintenanceController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TransactionController;
@@ -89,14 +91,31 @@ Route::delete('/users/{user}', [UserController::class, 'destroy'])
     ->middleware(['auth', 'verified'])
     ->name('users.destroy');
 
+Route::get('/departments', [DepartmentController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('departments');
+Route::post('/departments', [DepartmentController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('departments.store');
+Route::put('/departments/{department}', [DepartmentController::class, 'update'])
+    ->middleware(['auth', 'verified'])
+    ->name('departments.update');
+Route::delete('/departments/{department}', [DepartmentController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('departments.destroy');
+
 Route::middleware('auth', 'verified')->group(function () {
-    Route::get('/profile/show', function () {
-        return Inertia::render('Profile/Show');
-    })->name('profile.show');
+    Route::get('/profile/show', [ProfileController::class, 'show'])->name('profile.show');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::patch('/notifications/{notificationId}/read', [NotificationController::class, 'markAsRead'])
+        ->name('notifications.markAsRead');
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])
+        ->name('notifications.markAllAsRead');
 });
 
 require __DIR__.'/auth.php';

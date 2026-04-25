@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\IncidentReport;
 use App\Models\Item;
+use App\Models\User;
+use App\Notifications\CriticalIncidentNotification;
+use App\Notifications\MaintenanceUpdateNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -14,9 +17,13 @@ use Inertia\Response;
 
 class MaintenanceController extends Controller
 {
+    private const INVENTORY_ITEMS_CACHE_KEY = 'maintenance:index:inventory-items';
+
+    private const INCIDENTS_CACHE_KEY = 'maintenance:index:incidents';
+
     public function index(): Response
     {
-        $inventoryItems = Item::query()
+        $inventoryItems = Cache::remember(self::INVENTORY_ITEMS_CACHE_KEY, now()->addSeconds(45), fn () => Item::query()
             ->select(['id', 'sku', 'name'])
             ->orderBy('name')
             ->get()
@@ -26,45 +33,47 @@ class MaintenanceController extends Controller
                 'name' => $item->name,
             ])
             ->values()
-            ->all();
+            ->all());
 
-        $incidents = IncidentReport::query()
-            ->with(['item:id,sku,name', 'reporter:id,name,username,email'])
-            ->latest('occurred_at')
-            ->get()
-            ->map(function (IncidentReport $report) {
-                $reporter = $report->reporter;
+        $incidents = Cache::remember(self::INCIDENTS_CACHE_KEY, now()->addSeconds(20), function () {
+            return IncidentReport::query()
+                ->with(['item:id,sku,name', 'reporter:id,name,username,email'])
+                ->latest('occurred_at')
+                ->get()
+                ->map(function (IncidentReport $report) {
+                    $reporter = $report->reporter;
 
-                $isDone = $report->status === IncidentReport::STATUS_RESOLVED
-                    || $report->status === IncidentReport::STATUS_CLOSED;
+                    $isDone = $report->status === IncidentReport::STATUS_RESOLVED
+                        || $report->status === IncidentReport::STATUS_CLOSED;
 
-                return [
-                    'id' => 'INC-'.str_pad((string) $report->id, 3, '0', STR_PAD_LEFT),
-                    'numericId' => $report->id,
-                    'item' => $report->item
-                        ? $report->item->name.' ('.$report->item->sku.')'
-                        : '—',
-                    'reportedBy' => $reporter?->name
-                        ?? $reporter?->username
-                        ?? $reporter?->email
-                        ?? '—',
-                    'date' => $report->occurred_at?->format('Y-m-d') ?? '—',
-                    'severity' => ucfirst((string) $report->severity),
-                    'damage' => $report->damage_details ?? $report->description,
-                    'cost' => $report->estimated_cost !== null
-                        ? '₱'.number_format((float) $report->estimated_cost, 2)
-                        : '—',
-                    'action' => $isDone
-                        ? 'Fixed/Repaired'
-                        : $this->formatActionTakenLabel($report->action_taken),
-                    'attachmentUrl' => $report->attachment_path
-                        ? Storage::disk('public')->url($report->attachment_path)
-                        : null,
-                    'resolved' => $isDone,
-                ];
-            })
-            ->values()
-            ->all();
+                    return [
+                        'id' => 'INC-'.str_pad((string) $report->id, 3, '0', STR_PAD_LEFT),
+                        'numericId' => $report->id,
+                        'item' => $report->item
+                            ? $report->item->name.' ('.$report->item->sku.')'
+                            : '—',
+                        'reportedBy' => $reporter?->name
+                            ?? $reporter?->username
+                            ?? $reporter?->email
+                            ?? '—',
+                        'date' => $report->occurred_at?->format('Y-m-d') ?? '—',
+                        'severity' => ucfirst((string) $report->severity),
+                        'damage' => $report->damage_details ?? $report->description,
+                        'cost' => $report->estimated_cost !== null
+                            ? '₱'.number_format((float) $report->estimated_cost, 2)
+                            : '—',
+                        'action' => $isDone
+                            ? 'Fixed/Repaired'
+                            : $this->formatActionTakenLabel($report->action_taken),
+                        'attachmentUrl' => $report->attachment_path
+                            ? Storage::disk('public')->url($report->attachment_path)
+                            : null,
+                        'resolved' => $isDone,
+                    ];
+                })
+                ->values()
+                ->all();
+        });
 
         return Inertia::render('Maintenance', [
             'inventoryItems' => $inventoryItems,
@@ -120,6 +129,8 @@ class MaintenanceController extends Controller
             $attachmentPath = $request->file('attachment')->store('incidents', 'public');
         }
 
+        $createdIncident = null;
+
         DB::transaction(function () use (
             $validated,
             $item,
@@ -129,9 +140,10 @@ class MaintenanceController extends Controller
             $actionTaken,
             $title,
             $request,
-            $attachmentPath
+            $attachmentPath,
+            &$createdIncident
         ): void {
-            IncidentReport::create([
+            $createdIncident = IncidentReport::create([
                 'item_id' => $item->id,
                 'laboratory_id' => $laboratoryId,
                 'location_id' => $item->location_id,
@@ -167,7 +179,22 @@ class MaintenanceController extends Controller
             $item->update($itemUpdates);
         });
 
+        if ($createdIncident) {
+            $createdIncident->loadMissing('item:id,name,sku');
+            User::query()
+                ->where('status', User::STATUS_ACTIVE)
+                ->where('role', User::ROLE_ADMIN)
+                ->each(function (User $admin) use ($createdIncident): void {
+                    if ($createdIncident->severity === IncidentReport::SEVERITY_CRITICAL) {
+                        $admin->notify(new CriticalIncidentNotification($createdIncident));
+                    }
+
+                    $admin->notify(new MaintenanceUpdateNotification($createdIncident));
+                });
+        }
+
         Cache::forget(DashboardController::STATS_CACHE_KEY);
+        $this->forgetMaintenanceCaches();
 
         return redirect()
             ->back()
@@ -197,7 +224,14 @@ class MaintenanceController extends Controller
             }
         });
 
+        $incident->loadMissing('item:id,name,sku');
+        User::query()
+            ->where('status', User::STATUS_ACTIVE)
+            ->where('role', User::ROLE_ADMIN)
+            ->each(fn (User $admin) => $admin->notify(new MaintenanceUpdateNotification($incident)));
+
         Cache::forget(DashboardController::STATS_CACHE_KEY);
+        $this->forgetMaintenanceCaches();
 
         return redirect()
             ->back()
@@ -213,5 +247,12 @@ class MaintenanceController extends Controller
             'pending' => 'Pending',
             default => $action ? ucfirst(str_replace('_', ' ', $action)) : '—',
         };
+    }
+
+    private function forgetMaintenanceCaches(): void
+    {
+        Cache::forget(self::INVENTORY_ITEMS_CACHE_KEY);
+        Cache::forget(self::INCIDENTS_CACHE_KEY);
+        Cache::forget('inertia:system-status:critical-unresolved');
     }
 }

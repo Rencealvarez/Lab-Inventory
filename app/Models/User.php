@@ -93,6 +93,9 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'nickname',
+        'gender',
+        'department',
         'username',
         'email',
         'id_number',
@@ -125,7 +128,7 @@ class User extends Authenticatable
         ];
     }
 
-    public function department(): BelongsTo
+    public function departmentRelation(): BelongsTo
     {
         return $this->belongsTo(Department::class);
     }
