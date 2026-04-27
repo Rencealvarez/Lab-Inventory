@@ -96,7 +96,7 @@ export default function Login({ status, canResetPassword }) {
                         className="w-full justify-center py-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-sm font-bold tracking-normal rounded-xl transition-all duration-200 shadow-lg shadow-indigo-200" 
                         disabled={processing}
                     >
-                        Sign in to Account
+                        Sign in
                     </PrimaryButton>
                 </div>
             </form>

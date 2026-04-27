@@ -22,8 +22,8 @@ export default function GuestLayout({ children }) {
                             <img src="/pculogo.png" alt="PCU Logo" className="h-24 w-auto transition-transform hover:scale-110 duration-300" />
                         </div>
                     </Link>
-                    <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Lab Inventory</h1>
-                    <p className="mt-3 text-slate-600 text-sm font-medium">Welcome back! Please enter your details.</p>
+                    <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Laboratory Inventory</h1>
+                    <p className="mt-3 text-slate-600 text-sm font-medium">Welcome back! Please enter your credentials.</p>
                 </div>
 
                 <div className="w-full">

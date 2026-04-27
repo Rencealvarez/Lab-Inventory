@@ -6,7 +6,7 @@ export default function Welcome({ auth }) {
             <Head title="Welcome" />
             <div className="relative min-h-screen bg-gray-100 flex flex-col items-center justify-center">
                 <div className="text-center">
-                    <h1 className="text-5xl font-bold text-gray-900 mb-4">Lab Inventory System</h1>
+                    <h1 className="text-5xl font-bold text-gray-900 mb-4">Laboratory Inventory System</h1>
                     <p className="text-lg text-gray-600 mb-8">Manage laboratory equipment and supplies</p>
                     
                     <div className="space-x-4">
