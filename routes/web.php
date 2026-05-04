@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\FacilitiesController;
 use App\Http\Controllers\InventoryController;
@@ -99,6 +100,11 @@ Route::delete('/departments/{department}', [DepartmentController::class, 'destro
     ->name('departments.destroy');
 
 Route::middleware('auth', 'verified')->group(function () {
+    Route::get('/chat/users', [ChatController::class, 'users'])->name('chat.users');
+    Route::get('/chat/summaries', [ChatController::class, 'summaries'])->name('chat.summaries');
+    Route::get('/chat/conversations/{user}', [ChatController::class, 'conversation'])->name('chat.conversation');
+    Route::post('/chat/messages', [ChatController::class, 'send'])->name('chat.send');
+
     Route::get('/profile/show', [ProfileController::class, 'show'])->name('profile.show');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
