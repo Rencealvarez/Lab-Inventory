@@ -141,7 +141,7 @@ export default function Inventory({ items = [], categories = [], locations = [] 
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     className="block w-full sm:w-64 rounded-lg border border-[#d2deeb] bg-[#f8fafc] py-2.5 pl-10 pr-3 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#4663ac] transition-colors shadow-sm"
-                                    placeholder="Search SKU, item, type, location..."
+                                    placeholder="Search item name..."
                                 />
                             </div>
                             <button 
@@ -273,12 +273,12 @@ export default function Inventory({ items = [], categories = [], locations = [] 
                                 <div className="space-y-4">
                                     <div>
                                         <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">SKU / Serial Number</label>
-                                        <input value={data.sku} onChange={(e) => setData('sku', e.target.value)} type="text" className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors" placeholder="e.g. SKU-001" />
+                                        <input value={data.sku} onChange={(e) => setData('sku', e.target.value)} type="text" className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors" placeholder="Enter SKU or serial number" />
                                         {errors.sku && <p className="mt-1 text-xs text-red-500">{errors.sku}</p>}
                                     </div>
                                     <div>
                                         <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">Item Name</label>
-                                        <input value={data.name} onChange={(e) => setData('name', e.target.value)} type="text" className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors" placeholder="e.g. Microscope" />
+                                        <input value={data.name} onChange={(e) => setData('name', e.target.value)} type="text" className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors" placeholder="Item name" />
                                         {(errors.name || errors.item_name) && <p className="mt-1 text-xs text-red-500">{errors.name ?? errors.item_name}</p>}
                                     </div>
                                     <div>

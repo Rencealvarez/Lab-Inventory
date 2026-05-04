@@ -44,6 +44,18 @@ Route::post('/transactions', [TransactionController::class, 'store'])
 Route::patch('/transactions/{transaction}/return', [TransactionController::class, 'returnItem'])
     ->middleware(['auth', 'verified'])
     ->name('transactions.return');
+Route::post('/transactions/{transaction}/return-request', [TransactionController::class, 'requestReturn'])
+    ->middleware(['auth', 'verified'])
+    ->name('transactions.return-request');
+Route::patch('/transactions/{transaction}/return-approve', [TransactionController::class, 'approveReturnRequest'])
+    ->middleware(['auth', 'verified'])
+    ->name('transactions.return-approve');
+Route::patch('/transactions/borrow-requests/{borrowRequest}/approve', [TransactionController::class, 'approveBorrowRequest'])
+    ->middleware(['auth', 'verified'])
+    ->name('transactions.borrow-requests.approve');
+Route::patch('/transactions/borrow-requests/{borrowRequest}/reject', [TransactionController::class, 'rejectBorrowRequest'])
+    ->middleware(['auth', 'verified'])
+    ->name('transactions.borrow-requests.reject');
 
 Route::get('/facilities', [FacilitiesController::class, 'index'])
     ->middleware(['auth', 'verified'])

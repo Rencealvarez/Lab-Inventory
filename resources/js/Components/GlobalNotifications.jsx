@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, ShoppingCart, AlertTriangle, Info, Clock } from 'lucide-react';
+import { Link } from '@inertiajs/react';
+import { Bell, ShoppingCart, AlertTriangle, Info, Clock, Undo2, CheckCircle2 } from 'lucide-react';
 import Dropdown from '@/Components/Dropdown';
 
 export default function GlobalNotifications() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [notifications, setNotifications] = useState([]);
     const [selectedNotification, setSelectedNotification] = useState(null);
+    const [authorized, setAuthorized] = useState(true);
     const isFetchingRef = useRef(false);
 
     const iconMap = useMemo(
@@ -14,6 +16,18 @@ export default function GlobalNotifications() {
             transaction: {
                 icon: <ShoppingCart className="h-4 w-4 text-blue-500" />,
                 bgColor: 'bg-blue-50',
+            },
+            return_request: {
+                icon: <Undo2 className="h-4 w-4 text-indigo-500" />,
+                bgColor: 'bg-indigo-50',
+            },
+            borrow_request: {
+                icon: <ShoppingCart className="h-4 w-4 text-violet-500" />,
+                bgColor: 'bg-violet-50',
+            },
+            borrow_request_reviewed: {
+                icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />,
+                bgColor: 'bg-emerald-50',
             },
             incident: {
                 icon: <AlertTriangle className="h-4 w-4 text-red-500" />,
@@ -31,8 +45,21 @@ export default function GlobalNotifications() {
         [],
     );
 
+    const typeLabelMap = useMemo(
+        () => ({
+            transaction: 'Transaction',
+            return_request: 'Return Request',
+            incident: 'Incident',
+            maintenance: 'Maintenance',
+            borrow_request: 'Borrow Request',
+            borrow_request_reviewed: 'Borrow Request Review',
+            system: 'System',
+        }),
+        [],
+    );
+
     const fetchNotifications = async () => {
-        if (isFetchingRef.current) return;
+        if (!authorized || isFetchingRef.current) return;
 
         isFetchingRef.current = true;
 
@@ -40,7 +67,14 @@ export default function GlobalNotifications() {
             const { data } = await window.axios.get(route('notifications.index'));
             setNotifications(data.notifications ?? []);
             setUnreadCount(data.unreadCount ?? 0);
+            setAuthorized(true);
         } catch (error) {
+            if (error?.response?.status === 401) {
+                setAuthorized(false);
+                setNotifications([]);
+                setUnreadCount(0);
+                return;
+            }
             console.error('Failed to fetch notifications', error);
         } finally {
             isFetchingRef.current = false;
@@ -74,7 +108,11 @@ export default function GlobalNotifications() {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('focus', handleWindowFocus);
         };
-    }, []);
+    }, [authorized]);
+
+    if (!authorized) {
+        return null;
+    }
 
     const handleMarkAsRead = async (notificationId, isRead) => {
         if (isRead) return;
@@ -113,6 +151,22 @@ export default function GlobalNotifications() {
     const detailStyle = selectedNotification
         ? iconMap[selectedNotification.type] ?? iconMap.system
         : iconMap.system;
+    const detailHref = selectedNotification
+        ? (() => {
+            switch (selectedNotification.type) {
+                case 'transaction':
+                case 'return_request':
+                case 'borrow_request':
+                case 'borrow_request_reviewed':
+                    return route('transactions');
+                case 'incident':
+                case 'maintenance':
+                    return route('maintenance');
+                default:
+                    return null;
+            }
+        })()
+        : null;
 
     return (
         <div className="relative ms-3">
@@ -165,7 +219,7 @@ export default function GlobalNotifications() {
                                                 {notif.time}
                                             </span>
                                         </div>
-                                        <p className="text-[12px] text-gray-500 leading-relaxed truncate">
+                                        <p className="line-clamp-2 break-words text-[12px] text-gray-500 leading-relaxed">
                                             {notif.message}
                                         </p>
                                     </div>
@@ -203,13 +257,26 @@ export default function GlobalNotifications() {
                     >
                         <div className="mb-4 flex items-center justify-between">
                             <h4 className="text-[16px] font-bold text-gray-900">Notification Details</h4>
-                            <button
-                                type="button"
-                                className="rounded-md px-2 py-1 text-[12px] font-semibold text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-                                onClick={() => setSelectedNotification(null)}
-                            >
-                                Close
-                            </button>
+                            <div className="flex items-center gap-2">
+                                {detailHref && (
+                                    <Link
+                                        href={detailHref}
+                                        prefetch="mount"
+                                        cacheFor="10m"
+                                        className="rounded-md px-2 py-1 text-[12px] font-semibold text-[#3f59a3] hover:bg-blue-50 hover:text-[#344d8c]"
+                                        onClick={() => setSelectedNotification(null)}
+                                    >
+                                        See
+                                    </Link>
+                                )}
+                                <button
+                                    type="button"
+                                    className="rounded-md px-2 py-1 text-[12px] font-semibold text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                                    onClick={() => setSelectedNotification(null)}
+                                >
+                                    Close
+                                </button>
+                            </div>
                         </div>
 
                         <div className="mb-4 flex items-start gap-3">
@@ -224,7 +291,7 @@ export default function GlobalNotifications() {
 
                         <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
                             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Message</p>
-                            <p className="mt-2 text-[13px] leading-relaxed text-gray-700">
+                            <p className="mt-2 break-words text-[13px] leading-relaxed text-gray-700">
                                 {selectedNotification.message}
                             </p>
                         </div>
@@ -232,7 +299,9 @@ export default function GlobalNotifications() {
                         <div className="mt-4 grid grid-cols-2 gap-3 text-[12px]">
                             <div className="rounded-lg border border-gray-100 bg-white p-3">
                                 <p className="font-semibold text-gray-400">Type</p>
-                                <p className="mt-1 capitalize text-gray-700">{selectedNotification.type}</p>
+                                <p className="mt-1 text-gray-700">
+                                    {typeLabelMap[selectedNotification.type] ?? selectedNotification.type}
+                                </p>
                             </div>
                             <div className="rounded-lg border border-gray-100 bg-white p-3">
                                 <p className="font-semibold text-gray-400">Status</p>

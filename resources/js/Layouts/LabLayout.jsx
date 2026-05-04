@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { 
     LayoutDashboard, 
@@ -17,20 +17,40 @@ import GlobalChat from '@/Components/GlobalChat';
 
 export default function LabLayout({ children, title }) {
     const { auth, systemStatus } = usePage().props;
+    const { url } = usePage();
     const user = auth.user;
+    const roleLine = user?.role
+        ? String(user.role).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+        : 'User';
     const fullyOperational = systemStatus?.fullyOperational !== false;
     const [isNavigating, setIsNavigating] = useState(false);
 
-    const navLinks = [
-        { name: 'Dashboard', href: route('dashboard'), icon: LayoutDashboard },
-        { name: 'Inventory', href: route('inventory'), icon: Package },
-        { name: 'Transactions', href: route('transactions'), icon: ArrowLeftRight },
-        { name: 'Facilities', href: route('facilities'), icon: Building2 },
-        { name: 'Reports', href: route('reports'), icon: FileText },
-        { name: 'Maintenance', href: route('maintenance'), icon: Wrench },
-        { name: 'Users', href: route('users'), icon: Users },
-        { name: 'Departments', href: route('departments'), icon: GraduationCap },
-    ];
+    const isStaff = String(user?.role ?? '').toLowerCase() === 'staff';
+    const currentPath = useMemo(
+        () => new URL(url, window.location.origin).pathname,
+        [url]
+    );
+
+    const allNavLinks = useMemo(
+        () => [
+            { name: 'Dashboard', href: route('dashboard'), icon: LayoutDashboard },
+            { name: 'Inventory', href: route('inventory'), icon: Package },
+            { name: 'Transactions', href: route('transactions'), icon: ArrowLeftRight },
+            { name: 'Facilities', href: route('facilities'), icon: Building2 },
+            { name: 'Reports', href: route('reports'), icon: FileText },
+            { name: 'Maintenance', href: route('maintenance'), icon: Wrench },
+            { name: 'Users', href: route('users'), icon: Users },
+            { name: 'Departments', href: route('departments'), icon: GraduationCap },
+        ],
+        []
+    );
+
+    const navLinks = useMemo(() => {
+        if (!isStaff) {
+            return allNavLinks;
+        }
+        return allNavLinks.filter((link) => link.name === 'Transactions' || link.name === 'Maintenance');
+    }, [allNavLinks, isStaff]);
 
     useEffect(() => {
         const offStart = router.on('start', () => setIsNavigating(true));
@@ -60,14 +80,14 @@ export default function LabLayout({ children, title }) {
                 <nav className="flex-1 flex flex-col gap-2 overflow-y-auto custom-scrollbar">
                     {navLinks.map((link) => {
                         const Icon = link.icon;
-                        const active = window.location.pathname === new URL(link.href).pathname;
+                        const active = new URL(link.href).pathname === currentPath;
 
                         return (
                             <Link
                                 key={link.name}
                                 href={link.href}
-                                prefetch
-                                cacheFor="5m"
+                                prefetch="mount"
+                                cacheFor="10m"
                                 className={`flex items-center gap-3 space-x-3 rounded-xl px-4 py-3 transition-all duration-200 group ${
                                     active 
                                     ? 'bg-white text-[#3f59a3] font-bold shadow-md' 
@@ -84,8 +104,8 @@ export default function LabLayout({ children, title }) {
                 <div className="mt-auto pt-6 border-t border-white/10">
                     <Link
                         href={route('profile.show')}
-                        prefetch
-                        cacheFor="2m"
+                        prefetch="mount"
+                        cacheFor="10m"
                         className="flex items-center gap-3 px-3 py-3 rounded-xl bg-black/10 mb-4 hover:bg-black/20 transition-colors group cursor-pointer border border-transparent hover:border-white/10 shadow-sm"
                     >
                         <div className="h-9 w-9 rounded-full bg-[#4663ac] flex items-center justify-center border border-white/20 shadow-inner group-hover:scale-105 transition-transform">
@@ -93,7 +113,7 @@ export default function LabLayout({ children, title }) {
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-[13px] font-bold truncate">{user.name}</p>
-                            <p className="text-[11px] text-blue-200 truncate opacity-80 uppercase tracking-tighter">Administrator</p>
+                            <p className="text-[11px] text-blue-200 truncate opacity-80 uppercase tracking-tighter">{roleLine}</p>
                         </div>
                     </Link>
                     

@@ -52,6 +52,7 @@ export default function GlobalChat() {
     const { auth } = usePage().props;
     const currentUser = auth?.user;
     const currentUserId = currentUser?.id;
+    const isStaff = String(currentUser?.role ?? '').toLowerCase() === 'staff';
     const [isOpen, setIsOpen] = useState(false);
     const [message, setMessage] = useState('');
     const [messages, setMessages] = useState([]);
@@ -148,7 +149,7 @@ export default function GlobalChat() {
     );
 
     const fetchOnlineFromLaravel = useCallback(async () => {
-        if (!currentUserId) return;
+        if (!currentUserId || isStaff) return;
         try {
             const { data } = await window.axios.get(route('chat.users'));
             const users = data?.users ?? [];
@@ -156,7 +157,7 @@ export default function GlobalChat() {
         } catch {
             // ignore
         }
-    }, [currentUserId]);
+    }, [currentUserId, isStaff]);
 
     useEffect(() => {
         let isMounted = true;

@@ -15,7 +15,11 @@ function todayISODate() {
     return new Date().toISOString().slice(0, 10);
 }
 
-export default function Maintenance({ inventoryItems = [], incidents = [] }) {
+export default function Maintenance({
+    inventoryItems = [],
+    incidents = [],
+    canResolveIncidents = true,
+}) {
     const { auth, flash } = usePage().props;
     const [isIncidentModalOpen, setIsIncidentModalOpen] = useState(false);
     const [toast, setToast] = useState(null);
@@ -124,7 +128,7 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
             preserveState: true,
             preserveScroll: true,
             forceFormData: true,
-            only: ['inventoryItems', 'incidents', 'flash', 'errors', 'systemStatus'],
+            only: ['inventoryItems', 'incidents', 'flash', 'errors', 'systemStatus', 'canResolveIncidents'],
             onSuccess: () => {
                 closeIncidentModal();
                 reset({
@@ -183,7 +187,7 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
             {
                 preserveState: true,
                 preserveScroll: true,
-                only: ['inventoryItems', 'incidents', 'flash', 'errors', 'systemStatus'],
+                only: ['inventoryItems', 'incidents', 'flash', 'errors', 'systemStatus', 'canResolveIncidents'],
                 onSuccess: () => {
                     setConfirmResolveId(null);
                 },
@@ -220,6 +224,7 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
                                 <h1 className="text-[22px] font-bold tracking-tight text-gray-800">Incident Reports</h1>
                                 <p className="mt-0.5 text-xs text-gray-500">
                                     {filteredIncidents.length} incident{filteredIncidents.length === 1 ? '' : 's'} shown
+                                    {!canResolveIncidents && ' (your submitted reports)'}
                                 </p>
                             </div>
                         </div>
@@ -376,7 +381,7 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
                                             </td>
                                             <td className="whitespace-nowrap px-2 py-3 text-center sm:px-3">
                                                 <div className="flex items-center justify-center">
-                                                    {!inc.resolved ? (
+                                                    {!inc.resolved && canResolveIncidents ? (
                                                         <button
                                                             type="button"
                                                             onClick={() => setConfirmResolveId(inc.numericId)}
@@ -399,7 +404,7 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
                 </div>
             </div>
 
-            {confirmResolveId !== null && (
+            {canResolveIncidents && confirmResolveId !== null && (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
                     <div
                         className="w-full max-w-md rounded-xl border border-gray-100 bg-white p-6 shadow-2xl"
@@ -609,33 +614,35 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
                                                 <p className="mt-1 text-xs text-red-600">{errors.damage_details}</p>
                                             )}
                                         </div>
-                                        <div className="flex items-center">
-                                            <label className="group relative flex cursor-pointer items-center gap-3">
-                                                <div className="relative flex h-5 w-5 items-center justify-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={data.mark_resolved}
-                                                        onChange={(e) => setData('mark_resolved', e.target.checked)}
-                                                        className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-[#d2deeb] bg-white shadow-sm transition-all checked:border-green-600 checked:bg-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
-                                                    />
-                                                    <svg
-                                                        className="pointer-events-none absolute h-3.5 w-3.5 text-white opacity-0 transition-opacity peer-checked:opacity-100"
-                                                        viewBox="0 0 24 24"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        strokeWidth="3"
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        aria-hidden
-                                                    >
-                                                        <polyline points="20 6 9 17 4 12" />
-                                                    </svg>
-                                                </div>
-                                                <span className="text-[13px] font-semibold text-gray-700 transition-colors group-hover:text-gray-900">
-                                                    Mark as Resolved
-                                                </span>
-                                            </label>
-                                        </div>
+                                        {canResolveIncidents && (
+                                            <div className="flex items-center">
+                                                <label className="group relative flex cursor-pointer items-center gap-3">
+                                                    <div className="relative flex h-5 w-5 items-center justify-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={data.mark_resolved}
+                                                            onChange={(e) => setData('mark_resolved', e.target.checked)}
+                                                            className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-[#d2deeb] bg-white shadow-sm transition-all checked:border-green-600 checked:bg-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+                                                        />
+                                                        <svg
+                                                            className="pointer-events-none absolute h-3.5 w-3.5 text-white opacity-0 transition-opacity peer-checked:opacity-100"
+                                                            viewBox="0 0 24 24"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            strokeWidth="3"
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            aria-hidden
+                                                        >
+                                                            <polyline points="20 6 9 17 4 12" />
+                                                        </svg>
+                                                    </div>
+                                                    <span className="text-[13px] font-semibold text-gray-700 transition-colors group-hover:text-gray-900">
+                                                        Mark as Resolved
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="md:col-span-2">
