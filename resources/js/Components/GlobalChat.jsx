@@ -57,22 +57,47 @@ export default function GlobalChat() {
     const [messages, setMessages] = useState([]);
     const [chatUsers, setChatUsers] = useState([]);
     const [selectedUserId, setSelectedUserId] = useState('');
-    const [schemaReady, setSchemaReady] = useState(true);
-    const [onlineUsers, setOnlineUsers] = useState(1);
     const [onlineUserIds, setOnlineUserIds] = useState([]);
     const [unreadByUser, setUnreadByUser] = useState({});
     const [conversationFilter, setConversationFilter] = useState('all');
     const messagesEndRef = useRef(null);
-    const isOpenRef = useRef(false);
+    const [schemaReady, setSchemaReady] = useState(true);
     const selectedUserRef = useRef('');
+    const isOpenRef = useRef(false);
+    const isSendingRef = useRef(false);
+    const readCursorByUserRef = useRef({});
+
+    const persistReadCursor = useCallback(() => {
+        if (!currentUserId) return;
+        try {
+            localStorage.setItem(`chatReadCursor_${currentUserId}`, JSON.stringify(readCursorByUserRef.current));
+        } catch {
+            // ignore quota / private mode
+        }
+    }, [currentUserId]);
 
     useEffect(() => {
-        isOpenRef.current = isOpen;
-    }, [isOpen]);
+        if (!currentUserId) return;
+        try {
+            const raw = localStorage.getItem(`chatReadCursor_${currentUserId}`);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object') {
+                    readCursorByUserRef.current = { ...readCursorByUserRef.current, ...parsed };
+                }
+            }
+        } catch {
+            // ignore
+        }
+    }, [currentUserId]);
 
     useEffect(() => {
         selectedUserRef.current = selectedUserId;
     }, [selectedUserId]);
+
+    useEffect(() => {
+        isOpenRef.current = isOpen;
+    }, [isOpen]);
 
     const fetchConversation = useCallback(
         async (targetSelectedUserId) => {
@@ -81,41 +106,61 @@ export default function GlobalChat() {
                 return;
             }
 
-            const participants = [Number(currentUserId), Number(targetSelectedUserId)];
-            const { data, error } = await supabase
-                .from('messages')
-                .select('id, user_id, recipient_id, content, type, created_at')
-                .in('user_id', participants)
-                .in('recipient_id', participants)
-                .order('created_at', { ascending: true })
-                .limit(200);
+            try {
+                const participants = [Number(currentUserId), Number(targetSelectedUserId)];
+                const { data, error } = await supabase
+                    .from('messages')
+                    .select('id, user_id, recipient_id, content, type, created_at')
+                    .in('user_id', participants)
+                    .in('recipient_id', participants)
+                    .order('created_at', { ascending: true })
+                    .limit(200);
+                if (error) {
+                    if (error.message?.includes('recipient_id')) {
+                        setSchemaReady(false);
+                    }
+                    return;
+                }
+                const rows = data ?? [];
+                setSchemaReady(true);
+                const mappedRows = rows.map((row) => toChatMessage(row, currentUserId, userDirectoryRef.current));
+                setMessages(mappedRows);
 
-            if (error) {
-                if (error.message?.includes('recipient_id')) {
+                // Mark all incoming messages in the opened conversation as read up to latest id.
+                if (isOpenRef.current && String(selectedUserRef.current) === String(targetSelectedUserId)) {
+                    const latestIncomingId = mappedRows.reduce((maxId, row) => {
+                        const isIncoming =
+                            Number(row.userId) === Number(targetSelectedUserId) &&
+                            Number(row.recipientId) === Number(currentUserId);
+                        return isIncoming ? Math.max(maxId, Number(row.id)) : maxId;
+                    }, Number(readCursorByUserRef.current[String(targetSelectedUserId)] ?? 0));
+                    readCursorByUserRef.current[String(targetSelectedUserId)] = latestIncomingId;
+                    persistReadCursor();
+                }
+            } catch (error) {
+                if (error?.response?.status === 500) {
                     setSchemaReady(false);
                 }
                 return;
             }
-
-            setSchemaReady(true);
-            const filteredRows = (data ?? []).filter((row) =>
-                isConversationMessage(row, currentUserId, targetSelectedUserId)
-            );
-            setMessages(filteredRows.map((row) => toChatMessage(row, currentUserId, userDirectoryRef.current)));
         },
-        [currentUserId]
+        [currentUserId, persistReadCursor]
     );
+
+    const fetchOnlineFromLaravel = useCallback(async () => {
+        if (!currentUserId) return;
+        try {
+            const { data } = await window.axios.get(route('chat.users'));
+            const users = data?.users ?? [];
+            setOnlineUserIds(users.filter((u) => u?.isOnline).map((u) => String(u.id)));
+        } catch {
+            // ignore
+        }
+    }, [currentUserId]);
 
     useEffect(() => {
         let isMounted = true;
-        const channelName = 'global-lab-chat';
-        const chatChannel = supabase.channel(channelName, {
-            config: {
-                presence: {
-                    key: `user-${currentUserId ?? crypto.randomUUID()}`,
-                },
-            },
-        });
+        const chatChannel = supabase.channel('global-lab-chat');
 
         const loadUsers = async () => {
             const { data, error } = await supabase
@@ -125,34 +170,39 @@ export default function GlobalChat() {
                 .order('name', { ascending: true, nullsFirst: false });
 
             if (error || !isMounted) return;
-
             const mappedUsers = (data ?? []).map((user) => ({
                 id: String(user.id),
                 role: String(user.role ?? 'staff').toUpperCase(),
                 displayName: user.name ?? user.username ?? user.email ?? `User #${user.id}`,
             }));
-
             setChatUsers(mappedUsers);
             setSelectedUserId((prev) => (mappedUsers.some((user) => user.id === prev) ? prev : ''));
         };
 
-        const setOnlineCountFromPresence = () => {
-            const state = chatChannel.presenceState();
-            const uniqueOnlineIds = new Set();
+        const syncUnread = async () => {
+            const { data, error } = await supabase
+                .from('messages')
+                .select('id, user_id, recipient_id')
+                .eq('recipient_id', currentUserId)
+                .order('id', { ascending: false })
+                .limit(300);
+            if (error) return;
 
-            Object.values(state).forEach((presences) => {
-                (presences ?? []).forEach((presence) => {
-                    if (presence?.user_id !== undefined && presence?.user_id !== null) {
-                        uniqueOnlineIds.add(String(presence.user_id));
-                    }
-                });
+            const nextUnread = {};
+            (data ?? []).forEach((row) => {
+                const senderId = String(row.user_id);
+                if (!senderId || senderId === String(currentUserId)) return;
+                if (isOpenRef.current && selectedUserRef.current === senderId) return;
+                const lastReadId = Number(readCursorByUserRef.current[senderId] ?? 0);
+                if (Number(row.id) <= lastReadId) return;
+                nextUnread[senderId] = (nextUnread[senderId] ?? 0) + 1;
             });
-
-            setOnlineUserIds(Array.from(uniqueOnlineIds));
-            setOnlineUsers(uniqueOnlineIds.size > 0 ? uniqueOnlineIds.size : 1);
+            setUnreadByUser(nextUnread);
         };
 
         loadUsers();
+        syncUnread();
+        fetchOnlineFromLaravel();
 
         chatChannel
             .on(
@@ -165,62 +215,41 @@ export default function GlobalChat() {
                 async (payload) => {
                     const inserted = payload.new;
                     if (!inserted?.id) return;
+                    const incomingForCurrent = Number(inserted.recipient_id) === Number(currentUserId);
 
-                    if (!isConversationMessage(inserted, currentUserId, selectedUserRef.current)) {
-                        const isIncomingForCurrentUser = Number(inserted.recipient_id) === Number(currentUserId);
-                        if (!isOpenRef.current && isIncomingForCurrentUser && Number(inserted.user_id) !== Number(currentUserId)) {
-                            const senderId = String(inserted.user_id);
+                    if (incomingForCurrent && (!isOpenRef.current || selectedUserRef.current !== String(inserted.user_id))) {
+                        const senderId = String(inserted.user_id);
+                        const lastReadId = Number(readCursorByUserRef.current[senderId] ?? 0);
+                        if (Number(inserted.id) > lastReadId) {
                             setUnreadByUser((prev) => ({
                                 ...prev,
                                 [senderId]: (prev[senderId] ?? 0) + 1,
                             }));
                         }
-                        return;
                     }
 
-                    const { data: joinedRow } = await supabase
-                        .from('messages')
-                        .select('id, user_id, recipient_id, content, type, created_at')
-                        .eq('id', inserted.id)
-                        .single();
-
-                    const nextRow = joinedRow ?? inserted;
-
+                    if (!isConversationMessage(inserted, currentUserId, selectedUserRef.current)) return;
                     setMessages((prev) => {
-                        if (prev.some((item) => item.id === nextRow.id)) {
-                            return prev;
-                        }
-
-                        const mappedMessage = toChatMessage(nextRow, currentUserId, userDirectoryRef.current);
-                        const isIncomingForCurrentUser = Number(mappedMessage.recipientId) === Number(currentUserId);
-                        if (!isOpenRef.current && isIncomingForCurrentUser && !mappedMessage.isMe) {
-                            const senderId = String(mappedMessage.userId);
-                            setUnreadByUser((prev) => ({
-                                ...prev,
-                                [senderId]: (prev[senderId] ?? 0) + 1,
-                            }));
-                        }
-
-                        return [...prev, mappedMessage];
+                        if (prev.some((item) => item.id === inserted.id)) return prev;
+                        return [...prev, toChatMessage(inserted, currentUserId, userDirectoryRef.current)];
                     });
                 }
             )
-            .on('presence', { event: 'sync' }, setOnlineCountFromPresence)
-            .subscribe(async (status) => {
-                if (status !== 'SUBSCRIBED') return;
+            .subscribe();
 
-                await chatChannel.track({
-                    user_id: currentUserId,
-                    role: currentUser?.role ?? 'staff',
-                    online_at: new Date().toISOString(),
-                });
-            });
+        const intervalId = setInterval(() => {
+            if (document.hidden) return;
+            loadUsers();
+            syncUnread();
+            fetchOnlineFromLaravel();
+        }, 6000);
 
         return () => {
             isMounted = false;
+            clearInterval(intervalId);
             supabase.removeChannel(chatChannel);
         };
-    }, [currentUserId, currentUser?.role]);
+    }, [currentUserId, currentUser?.role, fetchOnlineFromLaravel]);
 
     useEffect(() => {
         // Clear previous thread immediately when switching recipient.
@@ -232,6 +261,7 @@ export default function GlobalChat() {
         if (!isOpen || !selectedUserId) return undefined;
 
         const intervalId = setInterval(() => {
+            if (document.hidden) return;
             fetchConversation(selectedUserId);
         }, 3000);
 
@@ -245,6 +275,18 @@ export default function GlobalChat() {
     useEffect(() => {
         if (!isOpen || !selectedUserId) return;
 
+        const latestIncomingId = messages.reduce((maxId, msg) => {
+            const isIncoming =
+                Number(msg.userId) === Number(selectedUserId) &&
+                Number(msg.recipientId) === Number(currentUserId);
+            return isIncoming ? Math.max(maxId, Number(msg.id)) : maxId;
+        }, Number(readCursorByUserRef.current[selectedUserId] ?? 0));
+        readCursorByUserRef.current[selectedUserId] = Math.max(
+            Number(readCursorByUserRef.current[selectedUserId] ?? 0),
+            latestIncomingId
+        );
+        persistReadCursor();
+
         setUnreadByUser((prev) => {
             if (!prev[selectedUserId]) return prev;
 
@@ -252,7 +294,7 @@ export default function GlobalChat() {
             delete next[selectedUserId];
             return next;
         });
-    }, [isOpen, selectedUserId]);
+    }, [isOpen, selectedUserId, messages, currentUserId, persistReadCursor]);
 
     const renderedMessages = useMemo(() => {
         return messages
@@ -321,18 +363,25 @@ export default function GlobalChat() {
     const onSendMessage = async () => {
         const trimmed = message.trim();
         if (!trimmed || !currentUserId || !selectedUserId || !schemaReady) return;
+        if (isSendingRef.current) return;
 
-        const senderRole = String(currentUser?.role ?? 'staff').toLowerCase() === 'admin' ? 'admin' : 'staff';
-        const { error } = await supabase.from('messages').insert({
-            user_id: currentUserId,
-            recipient_id: Number(selectedUserId),
-            content: trimmed,
-            type: senderRole,
-        });
-
-        if (!error) {
-            setMessage('');
-            fetchConversation(selectedUserId);
+        isSendingRef.current = true;
+        try {
+            const senderRole = String(currentUser?.role ?? 'staff').toLowerCase() === 'admin' ? 'admin' : 'staff';
+            const { error } = await supabase.from('messages').insert({
+                recipient_id: Number(selectedUserId),
+                content: trimmed,
+                user_id: currentUserId,
+                type: senderRole,
+            });
+            if (!error) {
+                setMessage('');
+                fetchConversation(selectedUserId);
+            }
+        } catch {
+            // Keep previous input when sending fails.
+        } finally {
+            isSendingRef.current = false;
         }
     };
 
