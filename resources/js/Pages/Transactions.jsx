@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { router, useForm, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
+    CalendarClock,
     FileText,
     Plus,
     Search,
@@ -15,6 +16,17 @@ function todayISODate() {
     return new Date().toISOString().slice(0, 10);
 }
 
+function pad2(n) {
+    return String(n).padStart(2, '0');
+}
+
+/** @param {Date} d */
+function localDatetimeInputValue(d) {
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(
+        d.getMinutes()
+    )}`;
+}
+
 export default function Transactions({
     items = [],
     transactions: transactionsProp = [],
@@ -23,6 +35,9 @@ export default function Transactions({
     canManageTransactions = true,
     canRequestBorrow = false,
     canReviewBorrowRequests = false,
+    facilitiesForReservation = [],
+    facilityReservations: facilityReservationsProp = [],
+    canRequestFacilityReservation = false,
 }) {
     const { flash, auth } = usePage().props;
     const staffUserId = auth?.user?.id != null ? String(auth.user.id) : '';
@@ -34,6 +49,12 @@ export default function Transactions({
     const [rejectingRequestId, setRejectingRequestId] = useState(null);
     const [rejectReason, setRejectReason] = useState('');
     const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+    const [isFacilityReservationModalOpen, setIsFacilityReservationModalOpen] = useState(false);
+    const [reservationLabId, setReservationLabId] = useState('');
+    const [reservationStart, setReservationStart] = useState('');
+    const [reservationEnd, setReservationEnd] = useState('');
+    const [reservationPurpose, setReservationPurpose] = useState('');
+    const [isSubmittingFacilityReservation, setIsSubmittingFacilityReservation] = useState(false);
     const [approvingReturnId, setApprovingReturnId] = useState(null);
     const [returnReviewTargetId, setReturnReviewTargetId] = useState(null);
     const [returnReview, setReturnReview] = useState({
@@ -48,6 +69,9 @@ export default function Transactions({
     const [borrowRequests, setBorrowRequests] = useState(
         borrowRequestsProp.length ? borrowRequestsProp : []
     );
+    const [facilityReservations, setFacilityReservations] = useState(
+        facilityReservationsProp.length ? facilityReservationsProp : []
+    );
     const refreshOnly = useMemo(
         () => [
             'transactions',
@@ -57,6 +81,8 @@ export default function Transactions({
             'canManageTransactions',
             'canRequestBorrow',
             'canReviewBorrowRequests',
+            'facilityReservations',
+            'facilitiesForReservation',
         ],
         []
     );
@@ -96,6 +122,10 @@ export default function Transactions({
     useEffect(() => {
         setBorrowRequests(borrowRequestsProp.length ? borrowRequestsProp : []);
     }, [borrowRequestsProp]);
+
+    useEffect(() => {
+        setFacilityReservations(facilityReservationsProp.length ? facilityReservationsProp : []);
+    }, [facilityReservationsProp]);
 
     const defaultBorrowerId = () => {
         const authId = auth?.user?.id != null ? String(auth.user.id) : null;
@@ -370,6 +400,76 @@ export default function Transactions({
         });
     };
 
+    const openFacilityReservationModal = () => {
+        const start = new Date();
+        start.setMinutes(0, 0, 0);
+        start.setHours(start.getHours() + 1);
+        const end = new Date(start.getTime());
+        end.setHours(end.getHours() + 2);
+        setReservationLabId('');
+        setReservationStart(localDatetimeInputValue(start));
+        setReservationEnd(localDatetimeInputValue(end));
+        setReservationPurpose('');
+        setIsFacilityReservationModalOpen(true);
+    };
+
+    const closeFacilityReservationModal = () => {
+        if (isSubmittingFacilityReservation) return;
+        setIsFacilityReservationModalOpen(false);
+    };
+
+    const submitFacilityReservation = (e) => {
+        e.preventDefault();
+        if (!reservationLabId || !reservationStart || !reservationEnd) {
+            setToast({
+                type: 'error',
+                message: 'Facility, start time, and end time are required.',
+            });
+            return;
+        }
+        setIsSubmittingFacilityReservation(true);
+        window.axios
+            .post(
+                route('facility-reservations.store'),
+                {
+                    laboratory_id: Number(reservationLabId),
+                    start_at: reservationStart,
+                    end_at: reservationEnd,
+                    purpose: reservationPurpose.trim() || null,
+                },
+                {
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                }
+            )
+            .then(({ data: response }) => {
+                if (response?.facilityReservation) {
+                    setFacilityReservations((previous) => [response.facilityReservation, ...previous]);
+                }
+                setToast({
+                    type: 'success',
+                    message:
+                        response?.message ??
+                        'Facility reservation submitted. An administrator will review it.',
+                });
+                setIsFacilityReservationModalOpen(false);
+            })
+            .catch((error) => {
+                const errs = error?.response?.data?.errors;
+                const fromValidation =
+                    errs && typeof errs === 'object' ? Object.values(errs).flat().filter(Boolean).join(' ') : '';
+                const errorMessage =
+                    error?.response?.data?.message ??
+                    (fromValidation || 'Unable to submit reservation. Please try again.');
+                setToast({ type: 'error', message: errorMessage });
+            })
+            .finally(() => {
+                setIsSubmittingFacilityReservation(false);
+            });
+    };
+
     const getStatusStyle = (status) => {
         switch (status) {
             case 'Completed':
@@ -431,6 +531,18 @@ export default function Transactions({
                 status: req.status,
                 raw: req,
             })),
+            ...facilityReservations.map((fr) => ({
+                id: `fr-${fr.id}`,
+                kind: 'facility_reservation',
+                ref: fr.displayId,
+                item: `${fr.facilityName} (${fr.facilityBuilding})`,
+                user: fr.requester ?? '—',
+                type: 'Facility reservation',
+                date: fr.startAtDate ?? '—',
+                expected: fr.endAt ?? '—',
+                status: fr.status,
+                raw: fr,
+            })),
             ...transactions.map((trx) => ({
                 id: `trx-${trx.id}`,
                 kind: 'transaction',
@@ -444,7 +556,7 @@ export default function Transactions({
                 raw: trx,
             })),
         ],
-        [borrowRequests, transactions, borrowers, auth?.user?.name, auth?.user?.username]
+        [borrowRequests, facilityReservations, transactions, borrowers, auth?.user?.name, auth?.user?.username]
     );
 
     const filteredRows = useMemo(() => {
@@ -461,13 +573,15 @@ export default function Transactions({
     const metrics = useMemo(
         () => ({
             total: unifiedRows.length,
-            pendingBorrowRequests: borrowRequests.filter((req) => req.status === 'Pending').length,
+            pendingBorrowRequests:
+                borrowRequests.filter((req) => req.status === 'Pending').length +
+                facilityReservations.filter((fr) => fr.status === 'Pending').length,
             activeBorrows: transactions.filter((trx) => trx.status === 'Issued' || trx.status === 'Active').length,
             returnRequestsPending: transactions.filter(
                 (trx) => trx.returnRequestPending || trx.hasPendingReturnRequest
             ).length,
         }),
-        [unifiedRows.length, borrowRequests, transactions]
+        [unifiedRows.length, borrowRequests, facilityReservations, transactions]
     );
 
     useEffect(() => {
@@ -477,7 +591,8 @@ export default function Transactions({
     }, [staffBorrowOnly, isNewTxModalOpen, staffUserId, data.user_id, setData]);
 
     useEffect(() => {
-        const shouldAutoRefresh = canReviewBorrowRequests || canRequestBorrow;
+        const shouldAutoRefresh =
+            canReviewBorrowRequests || canRequestBorrow || canRequestFacilityReservation;
         if (!shouldAutoRefresh) return undefined;
 
         const reloadTransactions = () => {
@@ -489,6 +604,7 @@ export default function Transactions({
                 processing ||
                 isSubmittingRequest ||
                 isNewTxModalOpen ||
+                isFacilityReservationModalOpen ||
                 returnReviewTargetId !== null ||
                 rejectingRequestId !== null;
 
@@ -523,8 +639,10 @@ export default function Transactions({
         processing,
         isSubmittingRequest,
         isNewTxModalOpen,
+        isFacilityReservationModalOpen,
         returnReviewTargetId,
         rejectingRequestId,
+        canRequestFacilityReservation,
     ]);
 
     return (
@@ -562,7 +680,7 @@ export default function Transactions({
                                
                             </div>
                         </div>
-                        <div className="mt-3 flex w-full items-center gap-2.5 sm:mt-0 sm:w-auto">
+                        <div className="mt-3 flex w-full flex-wrap items-center gap-2.5 sm:mt-0 sm:w-auto sm:justify-end">
                             <div className="relative w-full sm:w-auto">
                                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                                     <Search className="h-4 w-4 text-gray-400" />
@@ -575,6 +693,16 @@ export default function Transactions({
                                     placeholder="Search reference, item, user..."
                                 />
                             </div>
+                            {canRequestFacilityReservation && (
+                                <button
+                                    type="button"
+                                    onClick={openFacilityReservationModal}
+                                    className="flex items-center gap-2 rounded-lg border border-[#4663ac] bg-white px-4 py-2.5 text-[13px] font-semibold text-[#3f59a3] shadow-sm hover:bg-[#f0f4ff] transition-colors whitespace-nowrap"
+                                >
+                                    <CalendarClock className="h-4 w-4" strokeWidth={2} />
+                                    Reserve facility
+                                </button>
+                            )}
                             {showBorrowModal && (
                                 <button
                                     type="button"
@@ -654,10 +782,16 @@ export default function Transactions({
                                                     className={`${recordBadgeBase} ${
                                                         row.kind === 'borrow_request'
                                                             ? 'border-violet-200 bg-violet-50 text-violet-700'
-                                                            : 'border-blue-200 bg-blue-50 text-blue-700'
+                                                            : row.kind === 'facility_reservation'
+                                                              ? 'border-cyan-200 bg-cyan-50 text-cyan-800'
+                                                              : 'border-blue-200 bg-blue-50 text-blue-700'
                                                     }`}
                                                 >
-                                                    {row.kind === 'borrow_request' ? 'Request' : 'Transaction'}
+                                                    {row.kind === 'borrow_request'
+                                                        ? 'Request'
+                                                        : row.kind === 'facility_reservation'
+                                                          ? 'Booking'
+                                                          : 'Transaction'}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-2.5 font-medium text-gray-700">{row.ref}</td>
@@ -669,7 +803,8 @@ export default function Transactions({
                                             <td className="px-4 py-2.5">
                                                 <span
                                                     className={`${statusBadgeBase} ${
-                                                        row.kind === 'borrow_request'
+                                                        row.kind === 'borrow_request' ||
+                                                        row.kind === 'facility_reservation'
                                                             ? getRequestStatusStyle(row.status)
                                                             : getStatusStyle(row.status)
                                                     }`}
@@ -698,6 +833,13 @@ export default function Transactions({
                                                                 {reviewingRequestId === row.raw.id ? 'Saving…' : 'Approve'}
                                                             </button>
                                                         </div>
+                                                    ) : row.kind === 'facility_reservation' ? (
+                                                        <span
+                                                            className={`${statusBadgeBase} w-full border-dashed border-slate-200 bg-slate-50/80 text-slate-400`}
+                                                            title="Administrators review facility bookings from the Facilities page."
+                                                        >
+                                                            Admin review
+                                                        </span>
                                                     ) : row.kind === 'borrow_request' ? (
                                                         <span
                                                             className={`${statusBadgeBase} w-full border-dashed border-gray-200 bg-gray-50/50 text-gray-300`}
@@ -1137,6 +1279,120 @@ export default function Transactions({
                                         : staffBorrowOnly
                                           ? 'Submit request'
                                           : 'Process Transaction'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {canRequestFacilityReservation && isFacilityReservationModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <form onSubmit={submitFacilityReservation}>
+                            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+                                <div>
+                                    <h2 className="text-lg font-bold text-gray-800">Facility reservation</h2>
+                                    <p className="text-[13px] text-gray-500">
+                                        Request lab space for a class, meeting, or activity. An administrator will
+                                        confirm or decline.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={closeFacilityReservationModal}
+                                    className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                                >
+                                    <XCircle className="h-5 w-5" />
+                                </button>
+                            </div>
+
+                            <div className="overflow-y-auto px-6 py-6 space-y-4">
+                                {facilitiesForReservation.length === 0 ? (
+                                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+                                        No active facilities are available for booking right now. Please contact an
+                                        administrator.
+                                    </p>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">
+                                                Facility
+                                            </label>
+                                            <select
+                                                value={reservationLabId}
+                                                onChange={(e) => setReservationLabId(e.target.value)}
+                                                className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors"
+                                                required
+                                            >
+                                                <option value="">Select a facility…</option>
+                                                {facilitiesForReservation.map((f) => (
+                                                    <option key={f.id} value={f.id}>
+                                                        {f.lab_name} — {f.building_name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                            <div>
+                                                <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">
+                                                    Start
+                                                </label>
+                                                <input
+                                                    type="datetime-local"
+                                                    value={reservationStart}
+                                                    onChange={(e) => setReservationStart(e.target.value)}
+                                                    className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm"
+                                                    required
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">
+                                                    End
+                                                </label>
+                                                <input
+                                                    type="datetime-local"
+                                                    value={reservationEnd}
+                                                    onChange={(e) => setReservationEnd(e.target.value)}
+                                                    className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm"
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">
+                                                Purpose <span className="font-normal text-gray-400">(optional)</span>
+                                            </label>
+                                            <textarea
+                                                value={reservationPurpose}
+                                                onChange={(e) => setReservationPurpose(e.target.value)}
+                                                rows={3}
+                                                className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm resize-none"
+                                                placeholder="e.g. Biology lab practical, equipment setup, workshop…"
+                                                maxLength={2000}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 border-t border-gray-100 bg-gray-50/50 px-6 py-4">
+                                <button
+                                    type="button"
+                                    onClick={closeFacilityReservationModal}
+                                    disabled={isSubmittingFacilityReservation}
+                                    className="rounded-lg border border-[#d2deeb] bg-white px-5 py-2.5 text-[13px] font-semibold text-gray-600 shadow-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={
+                                        isSubmittingFacilityReservation || facilitiesForReservation.length === 0
+                                    }
+                                    className="rounded-lg bg-[#4663ac] hover:bg-[#3f59a3] disabled:opacity-60 px-6 py-2.5 text-[13px] font-semibold text-white shadow-sm transition-colors"
+                                >
+                                    {isSubmittingFacilityReservation ? 'Submitting…' : 'Submit reservation request'}
                                 </button>
                             </div>
                         </form>

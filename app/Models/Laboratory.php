@@ -78,6 +78,11 @@ class Laboratory extends Model
         return $this->hasMany(IncidentReport::class);
     }
 
+    public function facilityReservations(): HasMany
+    {
+        return $this->hasMany(FacilityReservation::class);
+    }
+
     public function feedbackUsers(): BelongsToMany
     {
         return $this->belongsToMany(

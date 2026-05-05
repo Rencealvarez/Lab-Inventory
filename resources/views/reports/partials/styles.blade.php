@@ -33,21 +33,25 @@
         vertical-align: middle;
         width: 36px;
         height: 36px;
+        object-fit: contain;
+        margin-right: 10px;
+    }
+    .logo-fallback {
         background: #3f59a3;
         border-radius: 6px;
         text-align: center;
         line-height: 36px;
         color: #fff;
         font-weight: bold;
-        font-size: 16px;
-        margin-right: 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
     }
     .logo-text {
         display: inline-block;
         vertical-align: middle;
     }
     .logo-text .system-name {
-        font-size: 16px;
+        font-size: 12px;
         font-weight: bold;
         color: #3f59a3;
         letter-spacing: 0.02em;

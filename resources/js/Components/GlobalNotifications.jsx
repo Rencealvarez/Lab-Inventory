@@ -29,6 +29,14 @@ export default function GlobalNotifications() {
                 icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />,
                 bgColor: 'bg-emerald-50',
             },
+            facility_reservation: {
+                icon: <Clock className="h-4 w-4 text-sky-500" />,
+                bgColor: 'bg-sky-50',
+            },
+            facility_reservation_reviewed: {
+                icon: <CheckCircle2 className="h-4 w-4 text-sky-600" />,
+                bgColor: 'bg-sky-50',
+            },
             incident: {
                 icon: <AlertTriangle className="h-4 w-4 text-red-500" />,
                 bgColor: 'bg-red-50',
@@ -53,6 +61,8 @@ export default function GlobalNotifications() {
             maintenance: 'Maintenance',
             borrow_request: 'Borrow Request',
             borrow_request_reviewed: 'Borrow Request Review',
+            facility_reservation: 'Facility Reservation',
+            facility_reservation_reviewed: 'Reservation Update',
             system: 'System',
         }),
         [],

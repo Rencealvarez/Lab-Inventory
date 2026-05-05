@@ -42,13 +42,20 @@ export default function Reports() {
             description: 'Analytics on facility occupancy rates, peak hours, and overall utilization.',
             icon: Activity,
             color: 'bg-purple-100 text-purple-600 border-purple-200',
-            pdfRoute: null,
+            pdfRoute: 'reports.usage',
         },
     ];
 
     const openReportPdf = (routeName) => {
         if (!routeName) return;
         window.open(route(routeName), '_blank');
+    };
+
+    const downloadReportPdf = (routeName) => {
+        if (!routeName) return;
+        const baseUrl = route(routeName);
+        const separator = baseUrl.includes('?') ? '&' : '?';
+        window.location.href = `${baseUrl}${separator}download=1`;
     };
 
     return (
@@ -97,7 +104,7 @@ export default function Reports() {
                                         <button
                                             type="button"
                                             disabled={!report.pdfRoute}
-                                            onClick={() => openReportPdf(report.pdfRoute)}
+                                            onClick={() => downloadReportPdf(report.pdfRoute)}
                                             title={report.pdfRoute ? 'Download / view PDF' : 'Not available yet'}
                                             className="flex items-center gap-2 rounded-lg bg-[#1e293b] px-4 py-2 text-[13px] font-semibold text-white shadow-sm hover:bg-gray-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                                         >

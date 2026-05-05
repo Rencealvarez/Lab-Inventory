@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FacilityReservation;
 use App\Models\IncidentReport;
 use App\Models\Item;
+use App\Models\Laboratory;
 use App\Models\Transaction;
 use App\Models\TransactionBorrowRequest;
 use App\Models\TransactionReturnRequest;
@@ -17,6 +19,7 @@ use Illuminate\Notifications\Notification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -191,6 +194,36 @@ class TransactionController extends Controller
             ->values()
             ->all();
 
+        $facilityMapper = app(FacilityReservationController::class);
+
+        $facilitiesForReservation = [];
+        $facilityReservationRows = [];
+
+        if ($isStaff && Schema::hasTable('facility_reservations')) {
+            $facilityReservationRows = FacilityReservation::query()
+                ->with(['laboratory.department:id,name', 'requester:id,name,username,email'])
+                ->where('requested_by', $viewer->id)
+                ->latest()
+                ->limit(50)
+                ->get()
+                ->map(fn (FacilityReservation $r) => $facilityMapper->mapForStaff($r))
+                ->values()
+                ->all();
+
+            $facilitiesForReservation = Laboratory::query()
+                ->with('department:id,name')
+                ->where('status', Laboratory::STATUS_ACTIVE)
+                ->orderBy('name')
+                ->get()
+                ->map(fn (Laboratory $lab) => [
+                    'id' => $lab->id,
+                    'lab_name' => $lab->name,
+                    'building_name' => $lab->department?->name ?? '—',
+                ])
+                ->values()
+                ->all();
+        }
+
         return Inertia::render('Transactions', [
             'items' => $items,
             'transactions' => $transactions,
@@ -199,6 +232,9 @@ class TransactionController extends Controller
             'canManageTransactions' => ! $isStaff,
             'canRequestBorrow' => (bool) $isStaff,
             'canReviewBorrowRequests' => ! $isStaff,
+            'facilitiesForReservation' => $facilitiesForReservation,
+            'facilityReservations' => $facilityReservationRows,
+            'canRequestFacilityReservation' => $isStaff && Schema::hasTable('facility_reservations'),
         ]);
     }
 

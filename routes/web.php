@@ -3,6 +3,7 @@
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\FacilityReservationController;
 use App\Http\Controllers\FacilitiesController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\MaintenanceController;
@@ -60,6 +61,19 @@ Route::patch('/transactions/borrow-requests/{borrowRequest}/reject', [Transactio
 Route::get('/facilities', [FacilitiesController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('facilities');
+Route::post('/facilities', [FacilitiesController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('facilities.store');
+
+Route::post('/facility-reservations', [FacilityReservationController::class, 'store'])
+    ->middleware(['auth', 'verified'])
+    ->name('facility-reservations.store');
+Route::patch('/facility-reservations/{facilityReservation}/approve', [FacilityReservationController::class, 'approve'])
+    ->middleware(['auth', 'verified'])
+    ->name('facility-reservations.approve');
+Route::patch('/facility-reservations/{facilityReservation}/reject', [FacilityReservationController::class, 'reject'])
+    ->middleware(['auth', 'verified'])
+    ->name('facility-reservations.reject');
 
 Route::get('/reports', function () {
     return Inertia::render('Reports');
@@ -74,6 +88,9 @@ Route::get('/reports/pdf/transactions', [ReportController::class, 'transactionRe
 Route::get('/reports/pdf/maintenance', [ReportController::class, 'maintenanceReport'])
     ->middleware(['auth', 'verified'])
     ->name('reports.maintenance');
+Route::get('/reports/pdf/usage', [ReportController::class, 'usageReport'])
+    ->middleware(['auth', 'verified'])
+    ->name('reports.usage');
 
 Route::get('/maintenance', [MaintenanceController::class, 'index'])
     ->middleware(['auth', 'verified'])
