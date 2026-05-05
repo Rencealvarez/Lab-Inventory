@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Building2, CheckCircle2, Plus, Search, XCircle } from 'lucide-react';
+import { ArrowUpDown, Building2, CheckCircle2, Plus, Search, XCircle } from 'lucide-react';
 
 import LabLayout from '@/Layouts/LabLayout';
 
@@ -15,6 +15,8 @@ export default function Departments({ departments = [] }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [search, setSearch] = useState('');
+    const [sortBy, setSortBy] = useState('name');
+    const [sortDirection, setSortDirection] = useState('asc');
     const [toast, setToast] = useState(null);
 
     const form = useForm(emptyFormState);
@@ -36,12 +38,47 @@ export default function Departments({ departments = [] }) {
     const filteredDepartments = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return departments;
-        return departments.filter((d) =>
-            [d.name, d.code, d.description]
-                .filter(Boolean)
-                .some((value) => String(value).toLowerCase().includes(q))
-        );
+        return departments
+            .map((d) => {
+                const fields = [d.name, d.code, d.description]
+                    .filter(Boolean)
+                    .map((value) => String(value).toLowerCase());
+
+                let score = 0;
+                fields.forEach((value) => {
+                    if (value === q) score += 120;
+                    else if (value.startsWith(q)) score += 70;
+                    else if (value.includes(q)) score += 30;
+                });
+
+                return { department: d, score };
+            })
+            .filter((row) => row.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .map((row) => row.department);
     }, [departments, search]);
+
+    const displayedDepartments = useMemo(() => {
+        const direction = sortDirection === 'asc' ? 1 : -1;
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+        return [...filteredDepartments].sort((a, b) => {
+            if (sortBy === 'users_count') {
+                return ((Number(a.users_count) || 0) - (Number(b.users_count) || 0)) * direction;
+            }
+            if (sortBy === 'laboratories_count') {
+                return ((Number(a.laboratories_count) || 0) - (Number(b.laboratories_count) || 0)) * direction;
+            }
+
+            const mapByField = {
+                code: [a.code ?? '', b.code ?? ''],
+                name: [a.name ?? '', b.name ?? ''],
+                description: [a.description ?? '', b.description ?? ''],
+            };
+            const [left, right] = mapByField[sortBy] ?? mapByField.name;
+            return collator.compare(String(left), String(right)) * direction;
+        });
+    }, [filteredDepartments, sortBy, sortDirection]);
 
     const openAdd = () => {
         setEditingId(null);
@@ -131,8 +168,30 @@ export default function Departments({ departments = [] }) {
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     className="block w-full rounded-lg border border-[#d2deeb] bg-[#f8fafc] py-2.5 pl-10 pr-3 text-[13px] text-gray-800 placeholder-gray-400 shadow-sm transition-colors focus:border-[#4663ac] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#4663ac] sm:w-64"
-                                    placeholder="Search departments..."
+                                    placeholder="Search code, name, description..."
                                 />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <select
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value)}
+                                    className="rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-700 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac]"
+                                >
+                                    <option value="name">Sort: Name</option>
+                                    <option value="code">Sort: Code</option>
+                                    <option value="description">Sort: Description</option>
+                                    <option value="users_count">Sort: Users</option>
+                                    <option value="laboratories_count">Sort: Facilities</option>
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50"
+                                    title={`Sorting ${sortDirection === 'asc' ? 'ascending' : 'descending'}`}
+                                >
+                                    <ArrowUpDown className="h-4 w-4" />
+                                    {sortDirection === 'asc' ? 'Asc' : 'Desc'}
+                                </button>
                             </div>
                             <button
                                 type="button"
@@ -158,14 +217,14 @@ export default function Departments({ departments = [] }) {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[#f1f5f9] text-gray-600">
-                                {filteredDepartments.length === 0 ? (
+                                {displayedDepartments.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="px-5 py-10 text-center text-[13px] text-gray-500">
-                                            No departments found.
+                                            No departments match "{search.trim()}".
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredDepartments.map((department) => (
+                                    displayedDepartments.map((department) => (
                                         <tr key={department.id} className="group transition-colors hover:bg-[#f8fafc]">
                                             <td className="px-5 py-3.5 font-semibold text-gray-700">{department.code}</td>
                                             <td className="px-5 py-3.5 font-semibold text-gray-800">{department.name}</td>

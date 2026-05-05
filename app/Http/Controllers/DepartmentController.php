@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Department;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -14,7 +15,24 @@ class DepartmentController extends Controller
     public function index(): Response
     {
         $departments = Department::query()
-            ->withCount(['users', 'laboratories'])
+            ->withCount('laboratories')
+            ->selectSub(
+                fn (Builder $query) => $query
+                    ->from('users')
+                    ->selectRaw('COUNT(DISTINCT users.id)')
+                    ->where(function (Builder $userQuery) {
+                        $userQuery
+                            ->whereColumn('users.department_id', 'departments.id')
+                            ->orWhere(function (Builder $legacyQuery) {
+                                $legacyQuery
+                                    ->whereNull('users.department_id')
+                                    ->whereRaw(
+                                        'LOWER(TRIM(users.department)) IN (LOWER(TRIM(departments.name)), LOWER(TRIM(departments.code)))'
+                                    );
+                            });
+                    }),
+                'users_count'
+            )
             ->orderBy('name')
             ->get()
             ->map(fn (Department $department) => [

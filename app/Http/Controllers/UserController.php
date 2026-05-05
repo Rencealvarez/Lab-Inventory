@@ -59,13 +59,19 @@ class UserController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
+        $departmentId = $validated['department_id'] ?? null;
+        $departmentName = $departmentId
+            ? Department::query()->whereKey($departmentId)->value('name')
+            : null;
+
         User::create([
             'name' => trim($validated['first_name'].' '.$validated['last_name']),
             'email' => $validated['email'],
             'username' => $validated['username'],
             'id_number' => $validated['id_number'],
             'role' => $validated['role'],
-            'department_id' => $validated['department_id'] ?? null,
+            'department' => $departmentName,
+            'department_id' => $departmentId,
             'status' => $validated['status'],
             'password' => Hash::make($validated['password']),
         ]);
@@ -104,13 +110,19 @@ class UserController extends Controller
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
+        $departmentId = $validated['department_id'] ?? null;
+        $departmentName = $departmentId
+            ? Department::query()->whereKey($departmentId)->value('name')
+            : null;
+
         $payload = [
             'name' => trim($validated['first_name'].' '.$validated['last_name']),
             'email' => $validated['email'],
             'username' => $validated['username'],
             'id_number' => $validated['id_number'],
             'role' => $validated['role'],
-            'department_id' => $validated['department_id'] ?? null,
+            'department' => $departmentName,
+            'department_id' => $departmentId,
             'status' => $validated['status'],
         ];
 

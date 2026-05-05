@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import {
+    ArrowUpDown,
     Building2,
     CalendarClock,
     Plus,
@@ -158,6 +159,7 @@ export default function Facilities({
         name: '',
         description: '',
         floor: '',
+        room_number: '',
         capacity: '',
         ui_status: 'Active',
         available_for_booking: true,
@@ -172,6 +174,7 @@ export default function Facilities({
             name: '',
             description: '',
             floor: '',
+            room_number: '',
             capacity: '',
             ui_status: 'Active',
             available_for_booking: true,
@@ -200,6 +203,8 @@ export default function Facilities({
     };
     const [selectedFacility, setSelectedFacility] = useState(null);
     const [search, setSearch] = useState('');
+    const [sortBy, setSortBy] = useState('lab_name');
+    const [sortDirection, setSortDirection] = useState('asc');
 
     useEffect(() => {
         if (flash?.success) {
@@ -224,13 +229,56 @@ export default function Facilities({
         if (!q) {
             return facilitiesProp;
         }
-        return facilitiesProp.filter(
-            (fac) =>
-                (fac.lab_name && fac.lab_name.toLowerCase().includes(q)) ||
-                (fac.building_name && fac.building_name.toLowerCase().includes(q)) ||
-                (fac.code && String(fac.code).toLowerCase().includes(q))
-        );
+        return facilitiesProp
+            .map((fac) => {
+                const fields = [
+                    fac.lab_name,
+                    fac.building_name,
+                    fac.code,
+                    fac.manager_id,
+                    fac.opening_hours,
+                    fac.floor_level,
+                ]
+                    .filter(Boolean)
+                    .map((value) => String(value).toLowerCase());
+
+                let score = 0;
+                fields.forEach((value) => {
+                    if (value === q) score += 120;
+                    else if (value.startsWith(q)) score += 70;
+                    else if (value.includes(q)) score += 30;
+                });
+
+                return { fac, score };
+            })
+            .filter((row) => row.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .map((row) => row.fac);
     }, [facilitiesProp, search]);
+
+    const displayedFacilities = useMemo(() => {
+        const direction = sortDirection === 'asc' ? 1 : -1;
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+        return [...facilities].sort((a, b) => {
+            if (sortBy === 'total_items') {
+                return ((Number(a.total_items) || 0) - (Number(b.total_items) || 0)) * direction;
+            }
+            if (sortBy === 'occupancy') {
+                return ((Number(a.current_occupancy) || 0) - (Number(b.current_occupancy) || 0)) * direction;
+            }
+
+            const mapByField = {
+                lab_name: [a.lab_name ?? '', b.lab_name ?? ''],
+                building_name: [a.building_name ?? '', b.building_name ?? ''],
+                floor_level: [a.floor_level ?? '', b.floor_level ?? ''],
+                status: [a.status ?? '', b.status ?? ''],
+            };
+
+            const [left, right] = mapByField[sortBy] ?? mapByField.lab_name;
+            return collator.compare(String(left), String(right)) * direction;
+        });
+    }, [facilities, sortBy, sortDirection]);
 
     const getStatusStyle = useCallback((status) => {
         switch (status) {
@@ -336,8 +384,31 @@ export default function Facilities({
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     className="block w-full sm:w-64 rounded-lg border border-[#d2deeb] bg-white py-2.5 pl-10 pr-3 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] transition-colors shadow-sm"
-                                    placeholder="Search facilities..."
+                                    placeholder="Search lab, building, code, manager..."
                                 />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <select
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value)}
+                                    className="rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-700 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac]"
+                                >
+                                    <option value="lab_name">Sort: Lab name</option>
+                                    <option value="building_name">Sort: Building</option>
+                                    <option value="floor_level">Sort: Floor</option>
+                                    <option value="status">Sort: Status</option>
+                                    <option value="occupancy">Sort: Occupancy</option>
+                                    <option value="total_items">Sort: Items</option>
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50"
+                                    title={`Sorting ${sortDirection === 'asc' ? 'ascending' : 'descending'}`}
+                                >
+                                    <ArrowUpDown className="h-4 w-4" />
+                                    {sortDirection === 'asc' ? 'Asc' : 'Desc'}
+                                </button>
                             </div>
                             <button
                                 type="button"
@@ -513,14 +584,14 @@ export default function Facilities({
 
                     {/* Facilities Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-5">
-                        {facilities.length === 0 && (
+                        {displayedFacilities.length === 0 && (
                             <div className="col-span-full rounded-xl border border-dashed border-[#d2deeb] bg-[#f8fafc] px-6 py-12 text-center text-[13px] text-gray-500">
                                 {facilitiesProp.length === 0
                                     ? 'No laboratories found. Add labs and locations in the database to see them here.'
-                                    : 'No facilities match your search.'}
+                                    : `No facilities match "${search.trim()}".`}
                             </div>
                         )}
-                        {facilities.map((fac) => (
+                        {displayedFacilities.map((fac) => (
                             <FacilityCard
                                 key={fac.id}
                                 fac={fac}
@@ -761,22 +832,39 @@ export default function Facilities({
                                             </div>
                                             <div>
                                                 <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">
-                                                    Max capacity
+                                                    Room number
                                                 </label>
                                                 <input
-                                                    type="number"
-                                                    min={0}
-                                                    value={createForm.data.capacity}
-                                                    onChange={(e) => createForm.setData('capacity', e.target.value)}
+                                                    type="text"
+                                                    value={createForm.data.room_number}
+                                                    onChange={(e) => createForm.setData('room_number', e.target.value)}
                                                     className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors"
-                                                    placeholder="e.g. 40"
+                                                    placeholder="e.g. P-101"
                                                 />
-                                                {createForm.errors.capacity && (
+                                                {createForm.errors.room_number && (
                                                     <p className="mt-1 text-xs text-red-600">
-                                                        {createForm.errors.capacity}
+                                                        {createForm.errors.room_number}
                                                     </p>
                                                 )}
                                             </div>
+                                        </div>
+                                        <div>
+                                            <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">
+                                                Max capacity
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                value={createForm.data.capacity}
+                                                onChange={(e) => createForm.setData('capacity', e.target.value)}
+                                                className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors"
+                                                placeholder="e.g. 40"
+                                            />
+                                            {createForm.errors.capacity && (
+                                                <p className="mt-1 text-xs text-red-600">
+                                                    {createForm.errors.capacity}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 

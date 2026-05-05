@@ -166,6 +166,7 @@ class FacilitiesController extends Controller
             'name' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:5000'],
             'floor' => ['nullable', 'string', 'max:30'],
+            'room_number' => ['nullable', 'string', 'max:50'],
             'capacity' => ['nullable', 'integer', 'min:0', 'max:999999'],
             'ui_status' => ['required', 'string', Rule::in(['Active', 'Maintenance', 'Closed'])],
             'available_for_booking' => ['required', 'boolean'],
@@ -210,11 +211,13 @@ class FacilitiesController extends Controller
 
             $floor = $validated['floor'] ?? null;
             $floor = is_string($floor) && trim($floor) === '' ? null : $floor;
+            $roomNumber = $validated['room_number'] ?? null;
+            $roomNumber = is_string($roomNumber) && trim($roomNumber) === '' ? null : $roomNumber;
 
             Location::create([
                 'laboratory_id' => $lab->id,
                 'name' => $validated['name'],
-                'room_number' => null,
+                'room_number' => $roomNumber !== null ? (string) $roomNumber : null,
                 'floor' => $floor !== null ? (string) $floor : null,
                 'description' => null,
             ]);

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { router, useForm, usePage } from '@inertiajs/react';
 import {
+    ArrowUpDown,
     Plus,
     Search,
     AlertTriangle,
@@ -29,6 +30,8 @@ export default function Maintenance({
     const [confirmResolveId, setConfirmResolveId] = useState(null);
     const [resolvingId, setResolvingId] = useState(null);
     const [search, setSearch] = useState('');
+    const [sortBy, setSortBy] = useState('date');
+    const [sortDirection, setSortDirection] = useState('desc');
 
     const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
         item_id: '',
@@ -82,12 +85,62 @@ export default function Maintenance({
     const filteredIncidents = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return incidents;
-        return incidents.filter((inc) =>
-            [inc.id, inc.item, inc.reportedBy, inc.date, inc.severity, inc.action, inc.damage, inc.cost]
-                .filter(Boolean)
-                .some((value) => String(value).toLowerCase().includes(q))
-        );
+        return incidents
+            .map((inc) => {
+                const fields = [
+                    inc.id,
+                    inc.item,
+                    inc.reportedBy,
+                    inc.date,
+                    inc.severity,
+                    inc.action,
+                    inc.damage,
+                    inc.cost,
+                    inc.resolved ? 'resolved' : 'open',
+                ]
+                    .filter(Boolean)
+                    .map((value) => String(value).toLowerCase());
+
+                let score = 0;
+                fields.forEach((value) => {
+                    if (value === q) score += 120;
+                    else if (value.startsWith(q)) score += 70;
+                    else if (value.includes(q)) score += 30;
+                });
+
+                return { incident: inc, score };
+            })
+            .filter((row) => row.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .map((row) => row.incident);
     }, [incidents, search]);
+
+    const displayedIncidents = useMemo(() => {
+        const direction = sortDirection === 'asc' ? 1 : -1;
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+        const severityWeight = { low: 1, medium: 2, high: 3, critical: 4 };
+
+        return [...filteredIncidents].sort((a, b) => {
+            if (sortBy === 'severity') {
+                const left = severityWeight[(a.severity || '').toLowerCase()] ?? 0;
+                const right = severityWeight[(b.severity || '').toLowerCase()] ?? 0;
+                return (left - right) * direction;
+            }
+            if (sortBy === 'status') {
+                return ((a.resolved ? 1 : 0) - (b.resolved ? 1 : 0)) * direction;
+            }
+
+            const mapByField = {
+                id: [a.id ?? '', b.id ?? ''],
+                item: [a.item ?? '', b.item ?? ''],
+                reportedBy: [a.reportedBy ?? '', b.reportedBy ?? ''],
+                date: [a.date ?? '', b.date ?? ''],
+                action: [a.action ?? '', b.action ?? ''],
+            };
+            const [left, right] = mapByField[sortBy] ?? mapByField.date;
+            return collator.compare(String(left), String(right)) * direction;
+        });
+    }, [filteredIncidents, sortBy, sortDirection]);
 
     const openIncidentModal = useCallback(() => {
         clearErrors();
@@ -238,8 +291,32 @@ export default function Maintenance({
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     className="block w-full rounded-lg border border-[#d2deeb] bg-[#f8fafc] py-2.5 pl-10 pr-3 text-[13px] text-gray-800 shadow-sm transition-colors placeholder:text-gray-400 focus:border-[#4663ac] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#4663ac] sm:w-64"
-                                    placeholder="Search incidents..."
+                                    placeholder="Search ID, item, reporter, severity, status..."
                                 />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <select
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value)}
+                                    className="rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-700 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac]"
+                                >
+                                    <option value="date">Sort: Date</option>
+                                    <option value="id">Sort: ID</option>
+                                    <option value="item">Sort: Item</option>
+                                    <option value="reportedBy">Sort: Reported By</option>
+                                    <option value="severity">Sort: Severity</option>
+                                    <option value="status">Sort: Status</option>
+                                    <option value="action">Sort: Action</option>
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50"
+                                    title={`Sorting ${sortDirection === 'asc' ? 'ascending' : 'descending'}`}
+                                >
+                                    <ArrowUpDown className="h-4 w-4" />
+                                    {sortDirection === 'asc' ? 'Asc' : 'Desc'}
+                                </button>
                             </div>
                             <button
                                 type="button"
@@ -295,14 +372,14 @@ export default function Maintenance({
                                             No incident reports yet.
                                         </td>
                                     </tr>
-                                ) : filteredIncidents.length === 0 ? (
+                                ) : displayedIncidents.length === 0 ? (
                                     <tr>
                                         <td colSpan={11} className="px-4 py-10 text-center text-sm text-gray-500">
-                                            No matching incidents found.
+                                            No incidents match "{search.trim()}".
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredIncidents.map((inc) => (
+                                    displayedIncidents.map((inc) => (
                                         <tr
                                             key={inc.numericId}
                                             className={`group transition-colors hover:bg-[#f8fafc] ${
