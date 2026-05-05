@@ -51,9 +51,7 @@ export default function LabLayout({ children, title }) {
             {/* Sidebar */}
             <aside className="h-full w-[260px] flex-shrink-0 bg-[#3f59a3] px-5 py-6 text-white shadow-lg flex flex-col overflow-hidden">
                 <div className="flex items-center gap-3 mb-8 px-2">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/20">
-                        <Building2 className="h-5 w-5 text-white" />
-                    </div>
+                    <img src="/pculogowhite.png" alt="PCU Logo" className="h-10 w-auto" />
                     <h1 className="text-2xl font-bold tracking-tight">Lab System</h1>
                 </div>
                 
