@@ -5,13 +5,13 @@ import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = 'PCU Lab System';
 const isDev = import.meta.env.DEV;
 const lazyPages = import.meta.glob('./Pages/**/*.jsx');
 const eagerPages = isDev ? import.meta.glob('./Pages/**/*.jsx', { eager: true }) : null;
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    title: (title) => (title ? `${title} - ${appName}` : appName),
     resolve: (name) => {
         const pagePath = `./Pages/${name}.jsx`;
 
