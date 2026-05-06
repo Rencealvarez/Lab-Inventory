@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head, useForm, usePage } from '@inertiajs/react';
-import { ChevronDown, Mail, Plus, Edit3, Check, X } from 'lucide-react';
+import { ChevronDown, Mail, Plus, Edit3, Check, X, Eye, EyeOff } from 'lucide-react';
 import LabLayout from '@/Layouts/LabLayout';
 
 function InputField({ label, value, onChange, placeholder, isDropdown = false, id, options = [], isEditing }) {
@@ -46,6 +46,9 @@ export default function Show({ user: userProp }) {
     const user = userProp ?? auth.user ?? {};
 
     const [isEditing, setIsEditing] = useState(false);
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const initialValues = {
         name: user.name ?? '',
         nickname: user.nickname ?? '',
@@ -57,6 +60,19 @@ export default function Show({ user: userProp }) {
 
     const { data, setData, patch, processing, reset } = useForm({
         ...initialValues,
+    });
+    const {
+        data: passwordData,
+        setData: setPasswordData,
+        put: updatePassword,
+        processing: passwordProcessing,
+        errors: passwordErrors,
+        reset: resetPassword,
+        recentlySuccessful: passwordRecentlySuccessful,
+    } = useForm({
+        current_password: '',
+        password: '',
+        password_confirmation: '',
     });
 
     const handleSave = () => {
@@ -70,6 +86,15 @@ export default function Show({ user: userProp }) {
         reset();
         setData({ ...initialValues });
         setIsEditing(false);
+    };
+
+    const handlePasswordSubmit = (e) => {
+        e.preventDefault();
+
+        updatePassword(route('password.update'), {
+            preserveScroll: true,
+            onSuccess: () => resetPassword(),
+        });
     };
 
     return (
@@ -191,6 +216,110 @@ export default function Show({ user: userProp }) {
                                     <Plus className="w-4 h-4" /> +Add Email Address
                                 </button>
                             </div>
+                        </div>
+
+                        {/* Change Password Section */}
+                        <div className="mt-12 border-t border-gray-100 pt-8">
+                            <h3 className="text-lg font-bold text-gray-900">Change Password</h3>
+                            <p className="mt-1 text-sm text-gray-500">
+                                Update your password to keep your account secure.
+                            </p>
+
+                            <form onSubmit={handlePasswordSubmit} className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="md:col-span-2">
+                                    <label htmlFor="current_password" className="text-[14px] font-medium text-gray-700">
+                                        Current Password
+                                    </label>
+                                    <div className="relative mt-2">
+                                        <input
+                                            id="current_password"
+                                            type={showCurrentPassword ? 'text' : 'password'}
+                                            value={passwordData.current_password}
+                                            onChange={(e) => setPasswordData('current_password', e.target.value)}
+                                            autoComplete="current-password"
+                                            className="w-full px-4 py-3 pr-12 rounded-xl border-none bg-[#f8fafc] text-[14px] text-gray-800 focus:ring-2 focus:ring-[#4663ac]/20 transition-all"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowCurrentPassword((prev) => !prev)}
+                                            className="absolute inset-y-0 right-3 my-auto text-gray-500 hover:text-gray-700 transition-colors"
+                                            aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+                                        >
+                                            {showCurrentPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                        </button>
+                                    </div>
+                                    {passwordErrors.current_password && (
+                                        <p className="mt-2 text-sm text-red-600">{passwordErrors.current_password}</p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label htmlFor="password" className="text-[14px] font-medium text-gray-700">
+                                        New Password
+                                    </label>
+                                    <div className="relative mt-2">
+                                        <input
+                                            id="password"
+                                            type={showNewPassword ? 'text' : 'password'}
+                                            value={passwordData.password}
+                                            onChange={(e) => setPasswordData('password', e.target.value)}
+                                            autoComplete="new-password"
+                                            className="w-full px-4 py-3 pr-12 rounded-xl border-none bg-[#f8fafc] text-[14px] text-gray-800 focus:ring-2 focus:ring-[#4663ac]/20 transition-all"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowNewPassword((prev) => !prev)}
+                                            className="absolute inset-y-0 right-3 my-auto text-gray-500 hover:text-gray-700 transition-colors"
+                                            aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                                        >
+                                            {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                        </button>
+                                    </div>
+                                    {passwordErrors.password && (
+                                        <p className="mt-2 text-sm text-red-600">{passwordErrors.password}</p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label htmlFor="password_confirmation" className="text-[14px] font-medium text-gray-700">
+                                        Confirm New Password
+                                    </label>
+                                    <div className="relative mt-2">
+                                        <input
+                                            id="password_confirmation"
+                                            type={showConfirmPassword ? 'text' : 'password'}
+                                            value={passwordData.password_confirmation}
+                                            onChange={(e) => setPasswordData('password_confirmation', e.target.value)}
+                                            autoComplete="new-password"
+                                            className="w-full px-4 py-3 pr-12 rounded-xl border-none bg-[#f8fafc] text-[14px] text-gray-800 focus:ring-2 focus:ring-[#4663ac]/20 transition-all"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowConfirmPassword((prev) => !prev)}
+                                            className="absolute inset-y-0 right-3 my-auto text-gray-500 hover:text-gray-700 transition-colors"
+                                            aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                                        >
+                                            {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                        </button>
+                                    </div>
+                                    {passwordErrors.password_confirmation && (
+                                        <p className="mt-2 text-sm text-red-600">{passwordErrors.password_confirmation}</p>
+                                    )}
+                                </div>
+
+                                <div className="md:col-span-2 flex items-center gap-3">
+                                    <button
+                                        type="submit"
+                                        disabled={passwordProcessing}
+                                        className="flex items-center gap-2 bg-[#4663ac] text-white px-6 py-2.5 rounded-xl font-semibold text-sm hover:shadow-lg hover:shadow-blue-200 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
+                                        {passwordProcessing ? 'Updating...' : 'Update Password'}
+                                    </button>
+                                    {passwordRecentlySuccessful && (
+                                        <p className="text-sm text-green-600">Password updated successfully.</p>
+                                    )}
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>

@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { router, useForm } from '@inertiajs/react';
 import {
+    ArrowUpDown,
     FileText,
     Plus,
     Search,
@@ -12,6 +13,8 @@ export default function Inventory({ items = [], categories = [], locations = [] 
     const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
     const [search, setSearch] = useState('');
+    const [sortBy, setSortBy] = useState('name');
+    const [sortDirection, setSortDirection] = useState('asc');
     const { data, setData, post, processing, reset, errors } = useForm({
         sku: '',
         name: '',
@@ -103,16 +106,69 @@ export default function Inventory({ items = [], categories = [], locations = [] 
         }
     }, []);
 
+    const normalizedItems = useMemo(() => {
+        if (Array.isArray(items)) return items;
+        if (Array.isArray(items?.data)) return items.data;
+        return [];
+    }, [items]);
+
+    const normalizedCategories = useMemo(() => {
+        if (Array.isArray(categories)) return categories;
+        if (Array.isArray(categories?.data)) return categories.data;
+        return [];
+    }, [categories]);
+
+    const normalizedLocations = useMemo(() => {
+        if (Array.isArray(locations)) return locations;
+        if (Array.isArray(locations?.data)) return locations.data;
+        return [];
+    }, [locations]);
+
     const filteredItems = useMemo(() => {
         const q = search.trim().toLowerCase();
-        if (!q) return items;
+        if (!q) return normalizedItems;
 
-        return items.filter((item) =>
-            [item.sku, item.name, item.type, item.location, item.status]
-                .filter(Boolean)
-                .some((value) => String(value).toLowerCase().includes(q))
-        );
-    }, [items, search]);
+        return normalizedItems
+            .map((item) => {
+                const fields = [item.name, item.sku, item.type, item.location, item.status]
+                    .filter(Boolean)
+                    .map((value) => String(value).toLowerCase());
+
+                let score = 0;
+                fields.forEach((value) => {
+                    if (value === q) score += 120;
+                    else if (value.startsWith(q)) score += 70;
+                    else if (value.includes(q)) score += 30;
+                });
+
+                return { item, score };
+            })
+            .filter((row) => row.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .map((row) => row.item);
+    }, [normalizedItems, search]);
+
+    const displayedItems = useMemo(() => {
+        const direction = sortDirection === 'asc' ? 1 : -1;
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+        return [...filteredItems].sort((a, b) => {
+            if (sortBy === 'stock') {
+                return ((Number(a.stock) || 0) - (Number(b.stock) || 0)) * direction;
+            }
+
+            const mapByField = {
+                name: [a.name ?? '', b.name ?? ''],
+                sku: [a.sku ?? '', b.sku ?? ''],
+                type: [a.type ?? '', b.type ?? ''],
+                location: [a.location ?? '', b.location ?? ''],
+                status: [a.status ?? '', b.status ?? ''],
+            };
+
+            const [left, right] = mapByField[sortBy] ?? mapByField.name;
+            return collator.compare(String(left), String(right)) * direction;
+        });
+    }, [filteredItems, sortBy, sortDirection]);
 
     return (
         <LabLayout title="Inventory">
@@ -141,8 +197,31 @@ export default function Inventory({ items = [], categories = [], locations = [] 
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     className="block w-full sm:w-64 rounded-lg border border-[#d2deeb] bg-[#f8fafc] py-2.5 pl-10 pr-3 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#4663ac] transition-colors shadow-sm"
-                                    placeholder="Search SKU, item, type, location..."
+                                    placeholder="Search by name, SKU, type, location..."
                                 />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <select
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value)}
+                                    className="rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-700 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac]"
+                                >
+                                    <option value="name">Sort: Name</option>
+                                    <option value="sku">Sort: SKU</option>
+                                    <option value="type">Sort: Type</option>
+                                    <option value="location">Sort: Location</option>
+                                    <option value="stock">Sort: Stock</option>
+                                    <option value="status">Sort: Status</option>
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50"
+                                    title={`Sorting ${sortDirection === 'asc' ? 'ascending' : 'descending'}`}
+                                >
+                                    <ArrowUpDown className="h-4 w-4" />
+                                    {sortDirection === 'asc' ? 'Asc' : 'Desc'}
+                                </button>
                             </div>
                             <button 
                                 onClick={openAddModal}
@@ -172,17 +251,17 @@ export default function Inventory({ items = [], categories = [], locations = [] 
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[#f1f5f9] text-gray-600">
-                                {filteredItems.length === 0 ? (
+                                {displayedItems.length === 0 ? (
                                     <tr>
                                         <td
                                             colSpan={8}
                                             className="px-5 py-10 text-center text-sm text-gray-500"
                                         >
-                                            No matching items found.
+                                            No matching items found for "{search.trim()}".
                                         </td>
                                     </tr>
                                 ) : (
-                                filteredItems.map((item) => {
+                                displayedItems.map((item) => {
                                     const min = item.min_stock_alert ?? 0;
                                     const isLow =
                                         min > 0 && item.stock <= min;
@@ -273,19 +352,19 @@ export default function Inventory({ items = [], categories = [], locations = [] 
                                 <div className="space-y-4">
                                     <div>
                                         <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">SKU / Serial Number</label>
-                                        <input value={data.sku} onChange={(e) => setData('sku', e.target.value)} type="text" className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors" placeholder="e.g. SKU-001" />
+                                        <input value={data.sku} onChange={(e) => setData('sku', e.target.value)} type="text" className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors" placeholder="Enter SKU or serial number" />
                                         {errors.sku && <p className="mt-1 text-xs text-red-500">{errors.sku}</p>}
                                     </div>
                                     <div>
                                         <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">Item Name</label>
-                                        <input value={data.name} onChange={(e) => setData('name', e.target.value)} type="text" className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors" placeholder="e.g. Microscope" />
+                                        <input value={data.name} onChange={(e) => setData('name', e.target.value)} type="text" className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors" placeholder="Item name" />
                                         {(errors.name || errors.item_name) && <p className="mt-1 text-xs text-red-500">{errors.name ?? errors.item_name}</p>}
                                     </div>
                                     <div>
                                         <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">Item Type</label>
                                         <select value={data.type} onChange={(e) => setData('type', e.target.value)} className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors">
                                             <option value="">Select type</option>
-                                            {categories.map((category) => (
+                                            {normalizedCategories.map((category) => (
                                                 <option key={category.id} value={category.id}>
                                                     {category.name}
                                                 </option>
@@ -301,7 +380,7 @@ export default function Inventory({ items = [], categories = [], locations = [] 
                                         <label className="mb-1.5 block text-[13px] font-semibold text-gray-700">Facility / Location</label>
                                         <select value={data.location_id} onChange={(e) => setData('location_id', e.target.value)} className="block w-full rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-800 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac] shadow-sm transition-colors">
                                             <option value="">Select location</option>
-                                            {locations.map((location) => (
+                                            {normalizedLocations.map((location) => (
                                                 <option key={location.id} value={location.id}>
                                                     {location.laboratory ? `${location.laboratory} / ${location.name}` : location.name}
                                                 </option>

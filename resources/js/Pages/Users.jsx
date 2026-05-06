@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import {
+    ArrowUpDown,
     Users as UsersIcon,
     Plus,
     Search,
@@ -46,6 +47,8 @@ export default function Users({ users: usersProp = [], departments = [] }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [search, setSearch] = useState('');
+    const [sortBy, setSortBy] = useState('name');
+    const [sortDirection, setSortDirection] = useState('asc');
     const [toast, setToast] = useState(null);
 
     const form = useForm(emptyFormState);
@@ -71,22 +74,57 @@ export default function Users({ users: usersProp = [], departments = [] }) {
     const filteredUsers = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return usersProp;
-        return usersProp.filter((u) => {
-            const hay = [
-                u.id_number,
-                u.name,
-                u.email,
-                u.username,
-                roleLabel(u.role),
-                u.department,
-                formatStatus(u.status),
-            ]
-                .filter(Boolean)
-                .join(' ')
-                .toLowerCase();
-            return hay.includes(q);
-        });
+        return usersProp
+            .map((u) => {
+                const fields = [
+                    u.id_number,
+                    u.name,
+                    u.email,
+                    u.username,
+                    roleLabel(u.role),
+                    u.department,
+                    formatStatus(u.status),
+                ]
+                    .filter(Boolean)
+                    .map((value) => String(value).toLowerCase());
+
+                let score = 0;
+                fields.forEach((value) => {
+                    if (value === q) score += 120;
+                    else if (value.startsWith(q)) score += 70;
+                    else if (value.includes(q)) score += 30;
+                });
+
+                return { user: u, score };
+            })
+            .filter((row) => row.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .map((row) => row.user);
     }, [usersProp, search]);
+
+    const displayedUsers = useMemo(() => {
+        const direction = sortDirection === 'asc' ? 1 : -1;
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+        const statusWeight = { active: 1, inactive: 2, suspended: 3 };
+
+        return [...filteredUsers].sort((a, b) => {
+            if (sortBy === 'status') {
+                const left = statusWeight[(a.status || 'active').toLowerCase()] ?? 99;
+                const right = statusWeight[(b.status || 'active').toLowerCase()] ?? 99;
+                return (left - right) * direction;
+            }
+
+            const mapByField = {
+                id_number: [a.id_number ?? '', b.id_number ?? ''],
+                name: [a.name ?? '', b.name ?? ''],
+                role: [roleLabel(a.role), roleLabel(b.role)],
+                department: [a.department ?? '', b.department ?? ''],
+                email: [a.email ?? '', b.email ?? ''],
+            };
+            const [left, right] = mapByField[sortBy] ?? mapByField.name;
+            return collator.compare(String(left), String(right)) * direction;
+        });
+    }, [filteredUsers, sortBy, sortDirection]);
 
     const getStatusStyle = (status) => {
         const s = (status || 'active').toLowerCase();
@@ -214,8 +252,31 @@ export default function Users({ users: usersProp = [], departments = [] }) {
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     className="block w-full sm:w-64 rounded-lg border border-[#d2deeb] bg-[#f8fafc] py-2.5 pl-10 pr-3 text-[13px] text-gray-800 placeholder-gray-400 focus:border-[#4663ac] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#4663ac] transition-colors shadow-sm"
-                                    placeholder="Search users..."
+                                    placeholder="Search ID, name, email, role, department..."
                                 />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <select
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value)}
+                                    className="rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-700 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac]"
+                                >
+                                    <option value="name">Sort: Name</option>
+                                    <option value="id_number">Sort: ID Number</option>
+                                    <option value="role">Sort: Role</option>
+                                    <option value="department">Sort: Department</option>
+                                    <option value="email">Sort: Email</option>
+                                    <option value="status">Sort: Status</option>
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50"
+                                    title={`Sorting ${sortDirection === 'asc' ? 'ascending' : 'descending'}`}
+                                >
+                                    <ArrowUpDown className="h-4 w-4" />
+                                    {sortDirection === 'asc' ? 'Asc' : 'Desc'}
+                                </button>
                             </div>
                             <button
                                 type="button"
@@ -244,14 +305,14 @@ export default function Users({ users: usersProp = [], departments = [] }) {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[#f1f5f9] text-gray-600">
-                                {filteredUsers.length === 0 ? (
+                                {displayedUsers.length === 0 ? (
                                     <tr>
                                         <td colSpan={7} className="px-6 py-10 text-center text-[13px] text-gray-500">
-                                            No users match your search.
+                                            No users match "{search.trim()}".
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredUsers.map((user) => (
+                                    displayedUsers.map((user) => (
                                         <tr key={user.id} className="hover:bg-[#f8fafc] transition-colors group">
                                             <td className="px-6 py-4">
                                                 <div className="w-4 h-4 rounded border border-gray-300" />

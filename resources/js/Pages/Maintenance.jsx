@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { router, useForm, usePage } from '@inertiajs/react';
 import {
+    ArrowUpDown,
     Plus,
     Search,
     AlertTriangle,
@@ -15,7 +16,11 @@ function todayISODate() {
     return new Date().toISOString().slice(0, 10);
 }
 
-export default function Maintenance({ inventoryItems = [], incidents = [] }) {
+export default function Maintenance({
+    inventoryItems = [],
+    incidents = [],
+    canResolveIncidents = true,
+}) {
     const { auth, flash } = usePage().props;
     const [isIncidentModalOpen, setIsIncidentModalOpen] = useState(false);
     const [toast, setToast] = useState(null);
@@ -25,6 +30,8 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
     const [confirmResolveId, setConfirmResolveId] = useState(null);
     const [resolvingId, setResolvingId] = useState(null);
     const [search, setSearch] = useState('');
+    const [sortBy, setSortBy] = useState('date');
+    const [sortDirection, setSortDirection] = useState('desc');
 
     const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
         item_id: '',
@@ -78,12 +85,62 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
     const filteredIncidents = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return incidents;
-        return incidents.filter((inc) =>
-            [inc.id, inc.item, inc.reportedBy, inc.date, inc.severity, inc.action, inc.damage, inc.cost]
-                .filter(Boolean)
-                .some((value) => String(value).toLowerCase().includes(q))
-        );
+        return incidents
+            .map((inc) => {
+                const fields = [
+                    inc.id,
+                    inc.item,
+                    inc.reportedBy,
+                    inc.date,
+                    inc.severity,
+                    inc.action,
+                    inc.damage,
+                    inc.cost,
+                    inc.resolved ? 'resolved' : 'open',
+                ]
+                    .filter(Boolean)
+                    .map((value) => String(value).toLowerCase());
+
+                let score = 0;
+                fields.forEach((value) => {
+                    if (value === q) score += 120;
+                    else if (value.startsWith(q)) score += 70;
+                    else if (value.includes(q)) score += 30;
+                });
+
+                return { incident: inc, score };
+            })
+            .filter((row) => row.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .map((row) => row.incident);
     }, [incidents, search]);
+
+    const displayedIncidents = useMemo(() => {
+        const direction = sortDirection === 'asc' ? 1 : -1;
+        const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+        const severityWeight = { low: 1, medium: 2, high: 3, critical: 4 };
+
+        return [...filteredIncidents].sort((a, b) => {
+            if (sortBy === 'severity') {
+                const left = severityWeight[(a.severity || '').toLowerCase()] ?? 0;
+                const right = severityWeight[(b.severity || '').toLowerCase()] ?? 0;
+                return (left - right) * direction;
+            }
+            if (sortBy === 'status') {
+                return ((a.resolved ? 1 : 0) - (b.resolved ? 1 : 0)) * direction;
+            }
+
+            const mapByField = {
+                id: [a.id ?? '', b.id ?? ''],
+                item: [a.item ?? '', b.item ?? ''],
+                reportedBy: [a.reportedBy ?? '', b.reportedBy ?? ''],
+                date: [a.date ?? '', b.date ?? ''],
+                action: [a.action ?? '', b.action ?? ''],
+            };
+            const [left, right] = mapByField[sortBy] ?? mapByField.date;
+            return collator.compare(String(left), String(right)) * direction;
+        });
+    }, [filteredIncidents, sortBy, sortDirection]);
 
     const openIncidentModal = useCallback(() => {
         clearErrors();
@@ -124,7 +181,7 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
             preserveState: true,
             preserveScroll: true,
             forceFormData: true,
-            only: ['inventoryItems', 'incidents', 'flash', 'errors', 'systemStatus'],
+            only: ['inventoryItems', 'incidents', 'flash', 'errors', 'systemStatus', 'canResolveIncidents'],
             onSuccess: () => {
                 closeIncidentModal();
                 reset({
@@ -183,7 +240,7 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
             {
                 preserveState: true,
                 preserveScroll: true,
-                only: ['inventoryItems', 'incidents', 'flash', 'errors', 'systemStatus'],
+                only: ['inventoryItems', 'incidents', 'flash', 'errors', 'systemStatus', 'canResolveIncidents'],
                 onSuccess: () => {
                     setConfirmResolveId(null);
                 },
@@ -220,6 +277,7 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
                                 <h1 className="text-[22px] font-bold tracking-tight text-gray-800">Incident Reports</h1>
                                 <p className="mt-0.5 text-xs text-gray-500">
                                     {filteredIncidents.length} incident{filteredIncidents.length === 1 ? '' : 's'} shown
+                                    {!canResolveIncidents && ' (your submitted reports)'}
                                 </p>
                             </div>
                         </div>
@@ -233,8 +291,32 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     className="block w-full rounded-lg border border-[#d2deeb] bg-[#f8fafc] py-2.5 pl-10 pr-3 text-[13px] text-gray-800 shadow-sm transition-colors placeholder:text-gray-400 focus:border-[#4663ac] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#4663ac] sm:w-64"
-                                    placeholder="Search incidents..."
+                                    placeholder="Search ID, item, reporter, severity, status..."
                                 />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <select
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value)}
+                                    className="rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[13px] text-gray-700 focus:border-[#4663ac] focus:outline-none focus:ring-1 focus:ring-[#4663ac]"
+                                >
+                                    <option value="date">Sort: Date</option>
+                                    <option value="id">Sort: ID</option>
+                                    <option value="item">Sort: Item</option>
+                                    <option value="reportedBy">Sort: Reported By</option>
+                                    <option value="severity">Sort: Severity</option>
+                                    <option value="status">Sort: Status</option>
+                                    <option value="action">Sort: Action</option>
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-[#d2deeb] bg-white px-3 py-2.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50"
+                                    title={`Sorting ${sortDirection === 'asc' ? 'ascending' : 'descending'}`}
+                                >
+                                    <ArrowUpDown className="h-4 w-4" />
+                                    {sortDirection === 'asc' ? 'Asc' : 'Desc'}
+                                </button>
                             </div>
                             <button
                                 type="button"
@@ -290,14 +372,14 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
                                             No incident reports yet.
                                         </td>
                                     </tr>
-                                ) : filteredIncidents.length === 0 ? (
+                                ) : displayedIncidents.length === 0 ? (
                                     <tr>
                                         <td colSpan={11} className="px-4 py-10 text-center text-sm text-gray-500">
-                                            No matching incidents found.
+                                            No incidents match "{search.trim()}".
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredIncidents.map((inc) => (
+                                    displayedIncidents.map((inc) => (
                                         <tr
                                             key={inc.numericId}
                                             className={`group transition-colors hover:bg-[#f8fafc] ${
@@ -376,7 +458,7 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
                                             </td>
                                             <td className="whitespace-nowrap px-2 py-3 text-center sm:px-3">
                                                 <div className="flex items-center justify-center">
-                                                    {!inc.resolved ? (
+                                                    {!inc.resolved && canResolveIncidents ? (
                                                         <button
                                                             type="button"
                                                             onClick={() => setConfirmResolveId(inc.numericId)}
@@ -399,7 +481,7 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
                 </div>
             </div>
 
-            {confirmResolveId !== null && (
+            {canResolveIncidents && confirmResolveId !== null && (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
                     <div
                         className="w-full max-w-md rounded-xl border border-gray-100 bg-white p-6 shadow-2xl"
@@ -609,33 +691,35 @@ export default function Maintenance({ inventoryItems = [], incidents = [] }) {
                                                 <p className="mt-1 text-xs text-red-600">{errors.damage_details}</p>
                                             )}
                                         </div>
-                                        <div className="flex items-center">
-                                            <label className="group relative flex cursor-pointer items-center gap-3">
-                                                <div className="relative flex h-5 w-5 items-center justify-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={data.mark_resolved}
-                                                        onChange={(e) => setData('mark_resolved', e.target.checked)}
-                                                        className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-[#d2deeb] bg-white shadow-sm transition-all checked:border-green-600 checked:bg-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
-                                                    />
-                                                    <svg
-                                                        className="pointer-events-none absolute h-3.5 w-3.5 text-white opacity-0 transition-opacity peer-checked:opacity-100"
-                                                        viewBox="0 0 24 24"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        strokeWidth="3"
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        aria-hidden
-                                                    >
-                                                        <polyline points="20 6 9 17 4 12" />
-                                                    </svg>
-                                                </div>
-                                                <span className="text-[13px] font-semibold text-gray-700 transition-colors group-hover:text-gray-900">
-                                                    Mark as Resolved
-                                                </span>
-                                            </label>
-                                        </div>
+                                        {canResolveIncidents && (
+                                            <div className="flex items-center">
+                                                <label className="group relative flex cursor-pointer items-center gap-3">
+                                                    <div className="relative flex h-5 w-5 items-center justify-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={data.mark_resolved}
+                                                            onChange={(e) => setData('mark_resolved', e.target.checked)}
+                                                            className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-[#d2deeb] bg-white shadow-sm transition-all checked:border-green-600 checked:bg-green-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+                                                        />
+                                                        <svg
+                                                            className="pointer-events-none absolute h-3.5 w-3.5 text-white opacity-0 transition-opacity peer-checked:opacity-100"
+                                                            viewBox="0 0 24 24"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            strokeWidth="3"
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            aria-hidden
+                                                        >
+                                                            <polyline points="20 6 9 17 4 12" />
+                                                        </svg>
+                                                    </div>
+                                                    <span className="text-[13px] font-semibold text-gray-700 transition-colors group-hover:text-gray-900">
+                                                        Mark as Resolved
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="md:col-span-2">

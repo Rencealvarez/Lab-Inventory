@@ -163,6 +163,11 @@ class User extends Authenticatable
         return $this->hasMany(IncidentReport::class, 'assigned_to');
     }
 
+    public function isStaff(): bool
+    {
+        return $this->role === self::ROLE_STAFF;
+    }
+
     public function feedbackLaboratories(): BelongsToMany
     {
         return $this->belongsToMany(

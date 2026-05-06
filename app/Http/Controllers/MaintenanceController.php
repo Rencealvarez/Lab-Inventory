@@ -23,6 +23,9 @@ class MaintenanceController extends Controller
 
     public function index(): Response
     {
+        $viewer = request()->user();
+        $isStaff = $viewer && $viewer->isStaff();
+
         $inventoryItems = Cache::remember(self::INVENTORY_ITEMS_CACHE_KEY, now()->addSeconds(45), fn () => Item::query()
             ->select(['id', 'sku', 'name'])
             ->orderBy('name')
@@ -35,49 +38,56 @@ class MaintenanceController extends Controller
             ->values()
             ->all());
 
-        $incidents = Cache::remember(self::INCIDENTS_CACHE_KEY, now()->addSeconds(20), function () {
-            return IncidentReport::query()
+        $incidentReports = $isStaff
+            ? IncidentReport::query()
                 ->with(['item:id,sku,name', 'reporter:id,name,username,email'])
+                ->where('reported_by', $viewer->id)
                 ->latest('occurred_at')
                 ->get()
-                ->map(function (IncidentReport $report) {
-                    $reporter = $report->reporter;
+            : Cache::remember(self::INCIDENTS_CACHE_KEY, now()->addSeconds(20), fn () => IncidentReport::query()
+                ->with(['item:id,sku,name', 'reporter:id,name,username,email'])
+                ->latest('occurred_at')
+                ->get());
 
-                    $isDone = $report->status === IncidentReport::STATUS_RESOLVED
-                        || $report->status === IncidentReport::STATUS_CLOSED;
+        $incidents = $incidentReports
+            ->map(function (IncidentReport $report) {
+                $reporter = $report->reporter;
 
-                    return [
-                        'id' => 'INC-'.str_pad((string) $report->id, 3, '0', STR_PAD_LEFT),
-                        'numericId' => $report->id,
-                        'item' => $report->item
-                            ? $report->item->name.' ('.$report->item->sku.')'
-                            : '—',
-                        'reportedBy' => $reporter?->name
-                            ?? $reporter?->username
-                            ?? $reporter?->email
-                            ?? '—',
-                        'date' => $report->occurred_at?->format('Y-m-d') ?? '—',
-                        'severity' => ucfirst((string) $report->severity),
-                        'damage' => $report->damage_details ?? $report->description,
-                        'cost' => $report->estimated_cost !== null
-                            ? '₱'.number_format((float) $report->estimated_cost, 2)
-                            : '—',
-                        'action' => $isDone
-                            ? 'Fixed/Repaired'
-                            : $this->formatActionTakenLabel($report->action_taken),
-                        'attachmentUrl' => $report->attachment_path
-                            ? Storage::disk('public')->url($report->attachment_path)
-                            : null,
-                        'resolved' => $isDone,
-                    ];
-                })
-                ->values()
-                ->all();
-        });
+                $isDone = $report->status === IncidentReport::STATUS_RESOLVED
+                    || $report->status === IncidentReport::STATUS_CLOSED;
+
+                return [
+                    'id' => 'INC-'.str_pad((string) $report->id, 3, '0', STR_PAD_LEFT),
+                    'numericId' => $report->id,
+                    'item' => $report->item
+                        ? $report->item->name.' ('.$report->item->sku.')'
+                        : '—',
+                    'reportedBy' => $reporter?->name
+                        ?? $reporter?->username
+                        ?? $reporter?->email
+                        ?? '—',
+                    'date' => $report->occurred_at?->format('Y-m-d') ?? '—',
+                    'severity' => ucfirst((string) $report->severity),
+                    'damage' => $report->damage_details ?? $report->description,
+                    'cost' => $report->estimated_cost !== null
+                        ? '₱'.number_format((float) $report->estimated_cost, 2)
+                        : '—',
+                    'action' => $isDone
+                        ? 'Fixed/Repaired'
+                        : $this->formatActionTakenLabel($report->action_taken),
+                    'attachmentUrl' => $report->attachment_path
+                        ? Storage::disk('public')->url($report->attachment_path)
+                        : null,
+                    'resolved' => $isDone,
+                ];
+            })
+            ->values()
+            ->all();
 
         return Inertia::render('Maintenance', [
             'inventoryItems' => $inventoryItems,
             'incidents' => $incidents,
+            'canResolveIncidents' => ! $isStaff,
         ]);
     }
 
@@ -88,7 +98,9 @@ class MaintenanceController extends Controller
                 && $request->input('estimated_cost') !== ''
                 ? $request->input('estimated_cost')
                 : null,
-            'mark_resolved' => $request->boolean('mark_resolved'),
+            'mark_resolved' => $request->user()?->isStaff()
+                ? false
+                : $request->boolean('mark_resolved'),
         ]);
 
         $validated = $request->validate([
@@ -203,6 +215,10 @@ class MaintenanceController extends Controller
 
     public function resolve(IncidentReport $incident): RedirectResponse
     {
+        if (request()->user()?->isStaff()) {
+            abort(403);
+        }
+
         if ($incident->status === IncidentReport::STATUS_RESOLVED
             || $incident->status === IncidentReport::STATUS_CLOSED) {
             return redirect()

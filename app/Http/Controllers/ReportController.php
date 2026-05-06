@@ -3,17 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Models\IncidentReport;
+use App\Models\FacilityReservation;
 use App\Models\Item;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Notifications\SystemAlertNotification;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 class ReportController extends Controller
 {
-    public function inventoryReport(): Response
+    public function inventoryReport(Request $request): Response
     {
         $rows = Item::query()
             ->select([
@@ -57,10 +59,10 @@ class ReportController extends Controller
             'Inventory report is now available',
         );
 
-        return $pdf->stream('lab-inventory-report.pdf');
+        return $this->respondWithPdf($pdf, 'lab-inventory-report.pdf', $request);
     }
 
-    public function transactionReport(): Response
+    public function transactionReport(Request $request): Response
     {
         $rows = Transaction::query()
             ->with([
@@ -100,10 +102,10 @@ class ReportController extends Controller
             'Transaction report is now available',
         );
 
-        return $pdf->stream('lab-transactions-report.pdf');
+        return $this->respondWithPdf($pdf, 'lab-transactions-report.pdf', $request);
     }
 
-    public function maintenanceReport(): Response
+    public function maintenanceReport(Request $request): Response
     {
         $rows = IncidentReport::query()
             ->with(['item:id,sku,name', 'reporter:id,name,username,email', 'laboratory:id,name'])
@@ -145,7 +147,72 @@ class ReportController extends Controller
             'Maintenance report is now available',
         );
 
-        return $pdf->stream('lab-maintenance-report.pdf');
+        return $this->respondWithPdf($pdf, 'lab-maintenance-report.pdf', $request);
+    }
+
+    public function usageReport(Request $request): Response
+    {
+        $reservations = FacilityReservation::query()
+            ->with(['laboratory:id,name,capacity'])
+            ->where('status', FacilityReservation::STATUS_APPROVED)
+            ->latest('start_at')
+            ->get();
+
+        $rows = $reservations
+            ->filter(fn (FacilityReservation $reservation) => $reservation->laboratory !== null)
+            ->groupBy('laboratory_id')
+            ->map(function ($group) {
+                /** @var FacilityReservation $first */
+                $first = $group->first();
+                $laboratory = $first->laboratory;
+
+                $totalHours = $group->sum(function (FacilityReservation $reservation) {
+                    if (! $reservation->start_at || ! $reservation->end_at) {
+                        return 0.0;
+                    }
+
+                    $minutes = max(0, $reservation->start_at->diffInMinutes($reservation->end_at, false));
+
+                    return round($minutes / 60, 2);
+                });
+
+                $hourBuckets = $group
+                    ->filter(fn (FacilityReservation $reservation) => $reservation->start_at !== null)
+                    ->groupBy(fn (FacilityReservation $reservation) => (int) $reservation->start_at->format('H'));
+
+                $peakHour = $hourBuckets->isNotEmpty()
+                    ? (int) $hourBuckets->sortByDesc(fn ($items) => $items->count())->keys()->first()
+                    : null;
+
+                return [
+                    'laboratory' => $laboratory?->name ?? '—',
+                    'capacity' => (int) ($laboratory?->capacity ?? 0),
+                    'approved_count' => $group->count(),
+                    'total_hours' => number_format((float) $totalHours, 2),
+                    'avg_hours' => $group->count() > 0
+                        ? number_format((float) ($totalHours / $group->count()), 2)
+                        : '0.00',
+                    'peak_hour' => $peakHour !== null
+                        ? sprintf('%02d:00 - %02d:59', $peakHour, $peakHour)
+                        : '—',
+                ];
+            })
+            ->sortBy('laboratory')
+            ->values()
+            ->all();
+
+        $pdf = Pdf::loadView('reports.usage', [
+            'documentTitle' => 'Laboratory Usage Report',
+            'generatedAt' => $this->formattedGeneratedAt(),
+            'rows' => $rows,
+        ])->setPaper('a4', 'landscape');
+
+        $this->sendSystemAlert(
+            'System Alert',
+            'Laboratory usage report is now available',
+        );
+
+        return $this->respondWithPdf($pdf, 'lab-usage-report.pdf', $request);
     }
 
     private function sendSystemAlert(string $title, string $message): void
@@ -154,6 +221,15 @@ class ReportController extends Controller
             ->where('status', User::STATUS_ACTIVE)
             ->where('role', User::ROLE_ADMIN)
             ->each(fn (User $admin) => $admin->notify(new SystemAlertNotification($title, $message)));
+    }
+
+    private function respondWithPdf($pdf, string $fileName, Request $request): Response
+    {
+        if ($request->boolean('download')) {
+            return $pdf->download($fileName);
+        }
+
+        return $pdf->stream($fileName);
     }
 
     private function formattedGeneratedAt(): string

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>{{ $documentTitle }} — Lab System</title>
+    <title>{{ $documentTitle }} — Philippine Christian University Dasmariñas</title>
     @include('reports.partials.styles')
 </head>
 <body>
