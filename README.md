@@ -298,6 +298,9 @@ Optional checks:
 - Feature implementation notes
 - Testing and deployment observations
 
+Email - dmin@gmail.com
+password - Admin1234
+
 ## Author
 
 - Rence Alvarez
